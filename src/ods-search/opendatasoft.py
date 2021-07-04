@@ -1,10 +1,13 @@
+"""API interface"""
+
 import requests
+
+from . import auth
 
 
 class Opendatasoft:
-  """
-  Core Opendatasoft object; stores session info and default API settings.
-  """
+  """Core Opendatasoft object; stores session info."""
+
   def __init__(
     self,
     data_portal_id: str = 'data',
@@ -31,9 +34,8 @@ class Opendatasoft:
       self.data_portal_id = data_portal_id
     self.base_url += '/api/v2'
   
-    self.api_key = api_key
     self.session = session or requests.Session()
-    # if self.api_key:
-    #   self.session.auth = 
+    if api_key:
+      self.session.auth = auth.TokenAuth(api_key)
 
     self.timezone = timezone
