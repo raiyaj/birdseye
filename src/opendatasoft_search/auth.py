@@ -1,7 +1,7 @@
 import requests
 
 
-class TokenAuth(requests.AuthBase):
+class TokenAuth(requests.auth.AuthBase):
   """API key authentication"""
 
   def __init__(self, api_key: str) -> None:
