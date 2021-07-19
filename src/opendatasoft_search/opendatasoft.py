@@ -9,43 +9,51 @@ logger = logging.getLogger(__package__)
 
 
 class Opendatasoft(models.OpendatasoftCore):
-  STR_CATALOG = 'catalog'
-  STR_DATA = 'data'
-  STR_MONITORING = 'monitoring'
-  STR_OPENDATASOFT = 'opendatasoft'
-  VALID_SOURCES = [STR_CATALOG, STR_MONITORING, STR_OPENDATASOFT]
+  DEFAULT_SUBDOMAIN = 'data'
+  VALID_SOURCES = ['catalog', 'monitoring', 'opendatasoft']
 
   def __init__(
     self,
-    subdomain: str = STR_DATA,
+    subdomain: str = DEFAULT_SUBDOMAIN,
     url: str = None,
-    source: str = STR_CATALOG,
+    source: str = 'catalog',
+    timezone: str = 'UTC',
     session: requests.Session = None,
+    api_key: str = None
   ) -> None:
     """
-    :param subdomain: Supdomain used to create the base API URL, eg.
-      {subdomain}.opendatasoft.com. Default: `data`, eg. data.opendatasoft.com
-      (the hub for all public datasets in Opendatasoft's network)
+    :param subdomain: Subdomain used to create the base API URL,
+      eg. https://{subdomain}.opendatasoft.com. Default: `data`,
+      eg. data.opendatasoft.com (the hub for all public datasets in
+      Opendatasoft's network)
     :param url: Custom base API URL
     :param source: Data source to search. Either `catalog`, `monitoring` or
       `opendatasoft`. Default: `catalog`
+    :param timezone: Default timezone applied to datetime fields in queries and
+      responses. Default: `UTC`
     :param session: A session object with which to make API calls
+    :param api_key: Opendatasoft API key for accessing private datasets
     """
     if not subdomain and not url:
       raise ValueError('`subdomain` and `url` cannot both be empty.')
     if source not in self.VALID_SOURCES:
       raise ValueError(f'{source} is not a valid data source.')
-    if source == self.STR_OPENDATASOFT and url or subdomain != self.STR_DATA:
+    if (
+      source == 'opendatasoft'
+      and (url or subdomain != self.DEFAULT_SUBDOMAIN)
+    ):
       logger.warn(
-        f'Using a custom base API URL with the {self.STR_OPENDATASOFT} data '
-        'source; results will match those of the default base URL.'
+        f'Using a custom base API URL with the `opendatasoft` data source; '
+        'results will match those of the default base URL.'
       )
 
-    opendatasoft_url = (
-      url.strip('/') if url else f'{subdomain}.opendatasoft.com'
+    api_url = (
+      f"{url.strip('/') if url else f'https://{subdomain}.opendatasoft.com'}"
       f'/api/v2/{source}'
     )
-    super().__init__(opendatasoft_url, session or requests.Session())
+    super().__init__(api_url, session or requests.Session(), timezone)
+    if api_key:
+      self.login(api_key=api_key)
 
   def login(self, api_key: str) -> None:
     """
@@ -56,11 +64,10 @@ class Opendatasoft(models.OpendatasoftCore):
 
   def query(self, dataset_id: str = None) -> query.QuerySet:
     """
-    Query datasets (or records, if given a `dataset_id`) sourced in the
-    Opendatasoft domain
+    Query datasets sourced in an Opendatasoft domain.
     :param dataset_id: Id of a dataset in which to query records
     """
-    opendatasoft_args = [self.opendatasoft_url, self.session]
+    core_args = [self.api_url, self.session, self.timezone]
     if dataset_id:
-      return query.Dataset(*opendatasoft_args, dataset_id=dataset_id)
-    return query.Catalog(*opendatasoft_args)
+      return query.Dataset(*core_args, dataset_id=dataset_id)
+    return query.Catalog(*core_args)
