@@ -12,9 +12,6 @@ class QuerySet(models.OpendatasoftCore):
   def __init__(self, *args, **kwargs) -> None:
     super().__init__(*args, **kwargs)
 
-  def _get_path_parts(self, endpoint: str) -> List[str]:
-    return []
-
   ## API endpoints ##
 
   def search(
@@ -25,16 +22,15 @@ class QuerySet(models.OpendatasoftCore):
     timezone: str = None
   ) -> Dict:
     """
-    Search datasets.
+    Search datasets or records.
     :param offset: Index of the first item to return. Default: 0
-    :param limit: Number of items to return. Default: 0
+    :param limit: Number of items to return. Default: 10
     :param include_app_metas: Explicitly request application metadata for each
       dataset. Default: False
     :param timezone: Timezone applied to datetime fields in queries and
       responses. Default: `UTC`
     """
     url = self.build_url(
-      'datasets',
       *self._get_path_parts(endpoint='search'),
       self.build_query_parameters(
         offset=offset,
@@ -46,8 +42,23 @@ class QuerySet(models.OpendatasoftCore):
     response = self.get(url)
     return response.json()
 
-  def aggregate(self):
-    pass
+  def aggregate(self, limit: int = None, timezone: str = None) -> Dict:
+    """
+    Aggregate datasets or records.
+    :param limit: Number of items to return
+    :param timezone: Timezone applied to datetime fields in queries and
+      responses. Default: `UTC`
+    """
+    url = self.build_url(
+      *self._get_path_parts(endpoint='aggregate'),
+      'aggregates',
+      self.build_query_parameters(
+        limit=limit,
+        timezone=timezone or self.timezone
+      )
+    )
+    response = self.get(url)
+    return response.json()
 
   def export(self):
     pass
@@ -84,11 +95,18 @@ class Dataset(QuerySet):
     super().__init__(*args, **kwargs)
 
   def _get_path_parts(self, endpoint: str) -> List[str]:
-    if endpoint == 'search':
-      return [self.dataset_id, 'records']
+    path_parameters = ['datasets', self.dataset_id]
+    if endpoint in ['search', 'lookup']:
+      path_parameters.append('records')
+    return path_parameters
 
 
 class Catalog(QuerySet):
+  def _get_path_parts(self, endpoint: str) -> List[str]:
+    if endpoint == 'search':
+      return ['datasets']
+    return []
+
   ## API endpoints ##
   def metadata_templates(self):
     pass

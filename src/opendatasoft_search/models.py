@@ -14,9 +14,12 @@ class OpendatasoftCore:
 
   def build_query_parameters(self, **kwargs) -> str:
     parameters = [
-      f'{"?" if i == 0 else "&"}{key}={str(value)}'
-      for i, (key, value) in enumerate(kwargs.items())     
+      f'&{key}={str(value)}'
+      for key, value in kwargs.items()
+      if value is not None
     ]
+    if parameters:
+      parameters[0] = parameters[0].replace('&', '?')
     return ''.join(parameters)
 
   def build_url(self, *args) -> str:

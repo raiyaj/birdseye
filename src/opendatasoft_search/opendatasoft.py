@@ -64,7 +64,7 @@ class Opendatasoft(models.OpendatasoftCore):
 
   def query(self, dataset_id: str = None) -> query.QuerySet:
     """
-    Query datasets sourced in an Opendatasoft domain.
+    Query datasets or records sourced in an Opendatasoft domain.
     :param dataset_id: Id of a dataset in which to query records
     """
     core_args = [self.api_url, self.session, self.timezone]
