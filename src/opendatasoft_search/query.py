@@ -1,72 +1,42 @@
-from typing import Dict, List
+from __future__ import annotations
+
+import logging
 
 from . import models
 
-
-class Q:
-  """ODSQL query"""
-  pass
+logger = logging.getLogger(__package__)
 
 
 class QuerySet(models.OpendatasoftCore):
   def __init__(self, *args, **kwargs) -> None:
+    self._source = kwargs.pop('source')
     super().__init__(*args, **kwargs)
+
+  def dataset(self, dataset_id: str) -> Dataset:
+    queryset_args = [self.base_url, self.timezone, self.session]
+    return Dataset(*queryset_args, source=self._source, dataset_id=dataset_id)
 
   ## API endpoints ##
 
-  def search(
-    self,
-    offset: int = 0,
-    limit: int = 10,
-    include_app_metas: bool = False,
-    timezone: str = None
-  ) -> Dict:
-    """
-    Search datasets or records.
-    :param offset: Index of the first item to return. Default: 0
-    :param limit: Number of items to return. Default: 10
-    :param include_app_metas: Explicitly request application metadata for each
-      dataset. Default: False
-    :param timezone: Timezone applied to datetime fields in queries and
-      responses. Default: `UTC`
-    """
-    url = self.build_url(
-      *self._get_path_parts(endpoint='search'),
-      self.build_query_parameters(
-        offset=offset,
-        limit=limit,
-        include_app_metas=include_app_metas,
-        timezone=timezone or self.timezone
-      )
-    )
-    response = self.get(url)
-    return response.json()
+  def search(self):
+    pass
 
-  def aggregate(self, limit: int = None, timezone: str = None) -> Dict:
-    """
-    Aggregate datasets or records.
-    :param limit: Number of items to return
-    :param timezone: Timezone applied to datetime fields in queries and
-      responses. Default: `UTC`
-    """
-    url = self.build_url(
-      *self._get_path_parts(endpoint='aggregate'),
-      'aggregates',
-      self.build_query_parameters(
-        limit=limit,
-        timezone=timezone or self.timezone
-      )
-    )
-    response = self.get(url)
-    return response.json()
+  def aggregate(self):
+    pass
 
   def export(self):
     pass
 
   def lookup(self):
     pass
+  
+  def facet(self):
+    pass
 
-  ## ODSQL filters ##
+  def metadata_template(self):
+    pass
+
+#   ## ODSQL filters ##
 
   def select(self):
     pass
@@ -80,7 +50,7 @@ class QuerySet(models.OpendatasoftCore):
   def order_by(self):
     pass
 
-  ## Facet filters ##
+#   ## Facet filters ##
 
   def refine(self):
     pass
@@ -91,25 +61,11 @@ class QuerySet(models.OpendatasoftCore):
 
 class Dataset(QuerySet):
   def __init__(self, *args, **kwargs) -> None:
-    self.dataset_id = kwargs.pop('dataset_id')
+    self._dataset_id = kwargs.pop('dataset_id')
     super().__init__(*args, **kwargs)
 
-  def _get_path_parts(self, endpoint: str) -> List[str]:
-    path_parameters = ['datasets', self.dataset_id]
-    if endpoint in ['search', 'lookup']:
-      path_parameters.append('records')
-    return path_parameters
-
-
-class Catalog(QuerySet):
-  def _get_path_parts(self, endpoint: str) -> List[str]:
-    if endpoint == 'search':
-      return ['datasets']
-    return []
-
-  ## API endpoints ##
-  def metadata_templates(self):
-    pass
-
-  def facets(self):
-    pass
+#   def _get_path_parts(self, endpoint: str) -> List[str]:
+#     path_parts = ['datasets', self.dataset_id]
+#     if endpoint in ['search', 'lookup']:
+#       path_parts.append('records')
+#     return path_parts
