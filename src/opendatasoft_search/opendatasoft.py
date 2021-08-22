@@ -4,13 +4,12 @@ import logging
 import requests
 
 from . import auth
-from . import models
 from . import query
 
 logger = logging.getLogger(__package__)
 
 
-class Opendatasoft(models.OpendatasoftCore):
+class Opendatasoft:
   def __init__(
     self,
     subdomain: str = 'data',
@@ -31,21 +30,21 @@ class Opendatasoft(models.OpendatasoftCore):
     """
     if not subdomain and not base_url:
       raise ValueError('`subdomain` and `base_url` cannot both be empty.')
-    base_url = (
+    self.base_url = (
       base_url.strip('/')
       if base_url
       else f'https://{subdomain}.opendatasoft.com'
     )
-    super().__init__(base_url, timezone, session or requests.Session())
+    self.timezone = timezone
+    self.session = session or requests.Session()
     if api_key:
       self.login(api_key)
 
-    queryset_args = [self.base_url, self.timezone, self.session]
-    self.catalog = query.QuerySet(*queryset_args, source='catalog')
-    self.monitoring = query.QuerySet(*queryset_args, source='monitoring')
-    self.opendatasoft = query.QuerySet(*queryset_args, source='opendatasoft')
+    query_args = [self.base_url, self.timezone, self.session]
+    self.catalog = query.CatalogQuery(*query_args, source='catalog')
+    self.monitoring = query.CatalogQuery(*query_args, source='monitoring')
+    self.opendatasoft = query.CatalogQuery(*query_args, source='opendatasoft')
 
-  def login(self, api_key: str) -> Opendatasoft:
+  def login(self, api_key: str) -> None:
     """Login to an Opendatasoft domain to access private datasets."""
     self.session.auth = auth.TokenAuth(api_key)
-    return self
