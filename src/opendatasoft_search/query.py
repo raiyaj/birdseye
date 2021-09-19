@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from . import models
 
@@ -9,9 +9,16 @@ logger = logging.getLogger(__package__)
 
 
 class Query(models.OpendatasoftCore):
-  def __init__(self, *args, **kwargs) -> None:
-    self._source = kwargs['source']
+  def __init__(self, *args, **kwargs):
+    self.timezone = kwargs.pop('timezone')
     super().__init__(*args, **kwargs)
+
+    self._select = []
+    self._where = []
+    self._group_by = []
+    self._order_by = []
+    self._refine = []
+    self._exclude = []
 
   ## API endpoints ##
 
@@ -31,6 +38,7 @@ class Query(models.OpendatasoftCore):
     url = self.build_url(
       *self._get_path_parts(endpoint='search'),
       self.build_query_parameters(
+        refine=self._refine,
         offset=offset,
         limit=limit,
         timezone=timezone or self.timezone
@@ -63,8 +71,10 @@ class Query(models.OpendatasoftCore):
   def lookup(self):
     pass
   
-  def facet(self):
-    pass
+  def facets(self):
+    """
+    Enumerate facets.
+    """
 
   def metadata_template(self):
     pass
@@ -85,8 +95,16 @@ class Query(models.OpendatasoftCore):
 
   ## Facet filters ##
 
-  def refine(self):
-    pass
+  def refine(self, **kwargs: Any) -> Query:
+    """
+    Limit results by refining on the given facet values.
+    :param kwargs: Facet names and values as keyword arguments.
+    """
+    self._refine.extend(
+      f'{facet_name}:{facet_value}'
+      for facet_name, facet_value in kwargs.items()
+    )
+    return self
 
   def exclude(self):
     pass
@@ -101,19 +119,24 @@ class CatalogQuery(Query):
     return []
 
   def dataset(self, dataset_id: str) -> DatasetQuery:
-    query_args = [self.base_url, self.timezone, self.session]
-    return DatasetQuery(*query_args, dataset_id=dataset_id, source=self._source)
+    return DatasetQuery(
+      dataset_id=dataset_id,
+      base_url=self.base_url,
+      session=self.session,
+      source=self.source,
+      timezone=self.timezone
+    )
 
 
 class DatasetQuery(Query):
   """Interface for the Dataset API"""
 
   def __init__(self, *args, **kwargs) -> None:
-    self._dataset_id = kwargs.pop('dataset_id')
+    self.dataset_id = kwargs.pop('dataset_id')
     super().__init__(*args, **kwargs)
 
   def _get_path_parts(self, endpoint: str) -> List[str]:
-    path_parts = ['datasets', self._dataset_id]
+    path_parts = ['datasets', self.dataset_id]
     if endpoint == 'search':
       path_parts.append('records')
     return path_parts
