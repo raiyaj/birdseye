@@ -39,6 +39,7 @@ class Query(models.OpendatasoftCore):
       *self._get_path_parts(endpoint='search'),
       self.build_query_parameters(
         refine=self._refine,
+        exclude=self._exclude,
         offset=offset,
         limit=limit,
         timezone=timezone or self.timezone
@@ -97,8 +98,8 @@ class Query(models.OpendatasoftCore):
 
   def refine(self, **kwargs: Any) -> Query:
     """
-    Limit results by refining on the given facet values.
-    :param kwargs: Facet names and values as keyword arguments.
+    Limit results by refining on the given facet values, ANDed together.
+    :param **kwargs: Facet lookup parameters.
     """
     self._refine.extend(
       f'{facet_name}:{facet_value}'
@@ -106,8 +107,20 @@ class Query(models.OpendatasoftCore):
     )
     return self
 
-  def exclude(self):
-    pass
+  def exclude(self, **kwargs: Any) -> Query:
+    """
+    Limit results by excluding the given facet values, ANDed together.
+    :param **kwargs: Facet lookup parameters, compatible with the `in` lookup
+      format. 
+    """
+    for facet_name, facet_value in kwargs.items():
+      if facet_name.endswith('__in'):
+        self._exclude.extend(
+          f'{facet_name[:-4]}:{item}' for item in facet_value
+        )
+      else:
+        self._exclude.append(f'{facet_name}:{facet_value}')
+    return self
 
 
 class CatalogQuery(Query):

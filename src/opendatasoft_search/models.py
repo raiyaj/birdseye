@@ -20,8 +20,8 @@ class OpendatasoftCore:
   def build_query_parameters(self, **kwargs: Any) -> str:
     """
     Build query parameter string. 
-    :param kwargs: Parameter names and values as keyword arguments. If a value
-    is a list, appends a separate query parameter for each item.
+    :param **kwargs: Parameter names and values. If a value is a list, appends a
+      separate query parameter for each item.
     """
     parameters = []
     for key, value in kwargs.items():
