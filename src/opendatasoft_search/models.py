@@ -1,11 +1,24 @@
+from datetime import datetime
 import logging
 import requests
-from typing import Any
+from typing import Any, Dict, NamedTuple
 
 logger = logging.getLogger(__package__)
 
 
 class OpendatasoftCore:
+  class Dataset(NamedTuple):
+    pass
+
+  class Record(NamedTuple):
+    id: str
+    timestamp: datetime
+    size: int
+    fields: Dict
+
+  class Facet(NamedTuple):
+    pass
+
   def __init__(
     self, base_url: str, session: requests.Session, source: str
   ) -> None:
@@ -42,4 +55,4 @@ class OpendatasoftCore:
   def get(self, url: str) -> requests.Response:
     response = self.session.get(url)
     logger.info(f'GET {url} {response.status_code}')
-    return response
+    return response.json()

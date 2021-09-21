@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import logging
 from typing import Any, Dict, List
 
@@ -19,6 +20,9 @@ class Query(models.OpendatasoftCore):
     self._order_by = []
     self._refine = []
     self._exclude = []
+
+  def _clone(self) -> Query:
+    return deepcopy(self)
 
   ## API endpoints ##
 
@@ -45,8 +49,8 @@ class Query(models.OpendatasoftCore):
         timezone=timezone or self.timezone
       )
     )
-    response = self.get(url)
-    return response.json()
+    json = self.get(url)
+    return json
 
   def aggregate(self, limit: str = None, timezone: str = None) -> Dict:
     """
@@ -63,8 +67,8 @@ class Query(models.OpendatasoftCore):
         timezone=timezone or self.timezone
       )
     )
-    response = self.get(url)
-    return response.json()
+    json = self.get(url)
+    return json
 
   def export(self):
     pass
@@ -85,7 +89,7 @@ class Query(models.OpendatasoftCore):
   def select(self):
     pass
 
-  def where(self):
+  def where(self, **kwargs: Any) -> Query:
     pass
 
   def group_by(self):
@@ -105,7 +109,7 @@ class Query(models.OpendatasoftCore):
       f'{facet_name}:{facet_value}'
       for facet_name, facet_value in kwargs.items()
     )
-    return self
+    return self._clone()
 
   def exclude(self, **kwargs: Any) -> Query:
     """
@@ -120,7 +124,7 @@ class Query(models.OpendatasoftCore):
         )
       else:
         self._exclude.append(f'{facet_name}:{facet_value}')
-    return self
+    return self._clone()
 
 
 class CatalogQuery(Query):
