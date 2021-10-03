@@ -2,17 +2,62 @@ from __future__ import annotations
 
 from copy import deepcopy
 import logging
-from typing import Any, Dict, List
+import re
+from typing import Any, Dict, Iterable, List, NewType, Union
 
 from . import models
 
 logger = logging.getLogger(__package__)
 
+ODSQL = NewType('ODSQL', str)
+
+
+class Lookup:
+  CONTAINS = '__contains'
+  ESCAPE = '__escape'
+  GT = '__gt'
+  GTE = '__gte'
+  LT = '__lt'
+  LTE = '__lte'
+  IN = '__in'
+  INRANGE = '__inrange'
+  ISNULL = '__isnull'
+
+  @staticmethod
+  def trim(parameter: str) -> str:
+    """
+    Trim lookup from a given parameter, assuming it ends with a valid lookup.
+    """
+    return re.search('(.+)__[a-z]+$', parameter).group(1)
+
+
+class Q:
+  """
+  """
+  def __init__(
+    self,
+    contains: Union[str, Iterable[str]] = [],
+    **kwargs: Any
+  ) -> None:
+    """
+    """
+    self.contains = contains if isinstance(contains, list) else [contains]
+    self.kwargs = kwargs
+
+  @property
+  def odsql(self):
+    """
+    """
+    filters = []
+    for key, value in self.kwargs.items():
+      filters.append(f'{key}={value}')
+    return 'and'.join(filters)
+
 
 class Query(models.OpendatasoftCore):
-  def __init__(self, *args, **kwargs):
+  def __init__(self, **kwargs) -> None:
     self.timezone = kwargs.pop('timezone')
-    super().__init__(*args, **kwargs)
+    super().__init__(**kwargs)
 
     self._select = []
     self._where = []
@@ -41,7 +86,8 @@ class Query(models.OpendatasoftCore):
     """
     url = self.build_url(
       *self._get_path_parts(endpoint='search'),
-      self.build_query_parameters(
+      self.build_querystring(
+        where=self._where,
         refine=self._refine,
         exclude=self._exclude,
         offset=offset,
@@ -62,7 +108,7 @@ class Query(models.OpendatasoftCore):
     url = self.build_url(
       *self._get_path_parts(endpoint='aggregate'),
       'aggregates',
-      self.build_query_parameters(
+      self.build_querystring(
         limit=limit,
         timezone=timezone or self.timezone
       )
@@ -81,7 +127,7 @@ class Query(models.OpendatasoftCore):
     Enumerate facets.
     """
 
-  def metadata_template(self):
+  def metadata(self):
     pass
 
   ## ODSQL filters ##
@@ -89,8 +135,28 @@ class Query(models.OpendatasoftCore):
   def select(self):
     pass
 
-  def where(self, **kwargs: Any) -> Query:
-    pass
+  def where(
+    self,
+    contains: Union[str, Iterable[str]] = [],
+    *args: Union[ODSQL, Q],
+    **kwargs: Any
+  ) -> Query:
+    """
+    Filter rows with a combination of `where` expressions.
+    :param contains:
+    :param args:
+    :param kwargs:
+    """
+    if not isinstance(contains, list):
+      contains = [contains]
+    filters = (
+      arg.odsql
+      if isinstance(arg, Q)
+      else arg
+      for arg in [*contains, *args, Q(**kwargs)]
+    )
+    self._where.append('and'.join(filters))
+    return self._clone()
 
   def group_by(self):
     pass
@@ -103,27 +169,26 @@ class Query(models.OpendatasoftCore):
   def refine(self, **kwargs: Any) -> Query:
     """
     Limit results by refining on the given facet values, ANDed together.
-    :param **kwargs: Facet lookup parameters.
+    :param **kwargs: Facet names and values.
     """
     self._refine.extend(
-      f'{facet_name}:{facet_value}'
-      for facet_name, facet_value in kwargs.items()
+      f'{key}:{value}'
+      for key, value in kwargs.items()
     )
     return self._clone()
 
   def exclude(self, **kwargs: Any) -> Query:
     """
     Limit results by excluding the given facet values, ANDed together.
-    :param **kwargs: Facet lookup parameters, compatible with the `in` lookup
-      format. 
+    :param **kwargs: Facet names and values, compatible with `in` lookups.
     """
-    for facet_name, facet_value in kwargs.items():
-      if facet_name.endswith('__in'):
+    for key, value in kwargs.items():
+      if key.endswith(Lookup.IN):
         self._exclude.extend(
-          f'{facet_name[:-4]}:{item}' for item in facet_value
+          f'{Lookup.trim(key)}:{item}' for item in value
         )
       else:
-        self._exclude.append(f'{facet_name}:{facet_value}')
+        self._exclude.append(f'{key}:{value}')
     return self._clone()
 
 
@@ -148,9 +213,9 @@ class CatalogQuery(Query):
 class DatasetQuery(Query):
   """Interface for the Dataset API"""
 
-  def __init__(self, *args, **kwargs) -> None:
+  def __init__(self, **kwargs) -> None:
     self.dataset_id = kwargs.pop('dataset_id')
-    super().__init__(*args, **kwargs)
+    super().__init__(**kwargs)
 
   def _get_path_parts(self, endpoint: str) -> List[str]:
     path_parts = ['datasets', self.dataset_id]

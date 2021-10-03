@@ -2,23 +2,12 @@ from datetime import datetime
 import logging
 import requests
 from typing import Any, Dict, NamedTuple
+import urllib.parse
 
 logger = logging.getLogger(__package__)
 
 
 class OpendatasoftCore:
-  class Dataset(NamedTuple):
-    pass
-
-  class Record(NamedTuple):
-    id: str
-    timestamp: datetime
-    size: int
-    fields: Dict
-
-  class Facet(NamedTuple):
-    pass
-
   def __init__(
     self, base_url: str, session: requests.Session, source: str
   ) -> None:
@@ -30,24 +19,19 @@ class OpendatasoftCore:
   def api_url(self) -> str:
     return f'{self.base_url}/api/v2/{self.source}'
 
-  def build_query_parameters(self, **kwargs: Any) -> str:
+  def build_querystring(self, **kwargs: Any) -> str:
     """
-    Build query parameter string. 
-    :param **kwargs: Parameter names and values. If a value is a list, appends a
-      separate query parameter for each item.
+    Build a url-encoded querystring. 
+    :param **kwargs: Parameter keys and values. If a value is a sequence,
+      generates a separate query parameter for each element of the value
+      sequence.
     """
-    parameters = []
-    for key, value in kwargs.items():
-      if value is None:
-        continue
-      if not isinstance(value, list):
-        value = [value]
-      parameters.extend(f'&{key}={item}' for item in value)
-
-    if parameters:
-      parameters[0] = '?' + parameters[0][1:]
-
-    return ''.join(parameters)
+    parameters = {
+      key: value
+      for key, value in kwargs.items()
+      if value is not None
+    }
+    return f'?{urllib.parse.urlencode(parameters, doseq=True)}'
 
   def build_url(self, *args: str) -> str:
     return '/'.join([self.api_url, *args])
@@ -56,3 +40,22 @@ class OpendatasoftCore:
     response = self.session.get(url)
     logger.info(f'GET {url} {response.status_code}')
     return response.json()
+
+
+class Dataset(NamedTuple):
+  pass
+
+
+class Record(NamedTuple):
+  id: str
+  timestamp: datetime
+  size: int
+  fields: Dict
+
+
+class Facet(NamedTuple):
+  pass
+
+
+class Metadata(NamedTuple):
+  pass
