@@ -48,13 +48,17 @@ class Q:
   def odsql(self):
     """
     """
-    filters = []
+    expressions = []
+    for query in self.contains:
+      expressions.append(f'"{query}"')
     for key, value in self.kwargs.items():
-      filters.append(f'{key}={value}')
-    return 'and'.join(filters)
+      expressions.append(f'{key}={value}')
+    return ' and '.join(expressions)
 
 
 class Query(models.OpendatasoftCore):
+  """
+  """
   def __init__(self, **kwargs) -> None:
     self.timezone = kwargs.pop('timezone')
     super().__init__(**kwargs)
@@ -79,10 +83,10 @@ class Query(models.OpendatasoftCore):
   ) -> Dict:
     """
     Search datasets.
-    :param offset: Index of the first item to return. Default: 0
-    :param limit: Number of items to return. Default: 0
+    :param offset: Index of the first item to return
+    :param limit: Number of items to return
     :param timezone: Timezone applied to datetime fields in queries and
-      responses. Default: `UTC`
+      responses
     """
     url = self.build_url(
       *self._get_path_parts(endpoint='search'),
@@ -101,9 +105,9 @@ class Query(models.OpendatasoftCore):
   def aggregate(self, limit: str = None, timezone: str = None) -> Dict:
     """
     Aggregate datasets.
-    :param limit: Number of items to return. Default: 0
+    :param limit: Number of items to return
     :param timezone: Timezone applied to datetime fields in queries and
-      responses. Default: `UTC`
+      responses
     """
     url = self.build_url(
       *self._get_path_parts(endpoint='aggregate'),
@@ -137,25 +141,26 @@ class Query(models.OpendatasoftCore):
 
   def where(
     self,
+    raw: ODSQL = None,
     contains: Union[str, Iterable[str]] = [],
-    *args: Union[ODSQL, Q],
+    *args: Q,
     **kwargs: Any
   ) -> Query:
     """
-    Filter rows with a combination of `where` expressions.
-    :param contains:
+    Filter rows.
+    :param raw: Raw ODSQL query
+    :param contains: Search terms, ANDed together. A wildcard (*) may be added
+      at the end of a word.
     :param args:
     :param kwargs:
     """
-    if not isinstance(contains, list):
-      contains = [contains]
-    filters = (
-      arg.odsql
-      if isinstance(arg, Q)
-      else arg
-      for arg in [*contains, *args, Q(**kwargs)]
+    expressions = (
+      expression.odsql
+      if isinstance(expression, Q)
+      else expression
+      for expression in [raw, Q(contains=contains), *args, Q(**kwargs)]
     )
-    self._where.append('and'.join(filters))
+    self._where.append(' and '.join(filter(None, expressions)))
     return self._clone()
 
   def group_by(self):
@@ -169,7 +174,7 @@ class Query(models.OpendatasoftCore):
   def refine(self, **kwargs: Any) -> Query:
     """
     Limit results by refining on the given facet values, ANDed together.
-    :param **kwargs: Facet names and values.
+    :param **kwargs: Facet names and values
     """
     self._refine.extend(
       f'{key}:{value}'
@@ -180,7 +185,7 @@ class Query(models.OpendatasoftCore):
   def exclude(self, **kwargs: Any) -> Query:
     """
     Limit results by excluding the given facet values, ANDed together.
-    :param **kwargs: Facet names and values, compatible with `in` lookups.
+    :param **kwargs: Facet names and values, compatible with `in` lookups
     """
     for key, value in kwargs.items():
       if key.endswith(Lookup.IN):

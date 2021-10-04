@@ -38,7 +38,7 @@ class OpendatasoftCore:
 
   def get(self, url: str) -> requests.Response:
     response = self.session.get(url)
-    logger.info(f'GET {url} {response.status_code}')
+    logger.info(f'GET {urllib.parse.unquote_plus(url)} {response.status_code}')
     return response.json()
 
 
