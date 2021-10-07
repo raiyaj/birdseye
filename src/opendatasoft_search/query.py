@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import logging
-import re
-from typing import Any, Dict, Iterable, List, NewType, Union
+from typing import Any, Iterable, List, NewType, Union
 
 from . import models
 
@@ -15,6 +14,7 @@ ODSQL = NewType('ODSQL', str)
 class Lookup:
   CONTAINS = '__contains'
   ESCAPE = '__escape'
+  EXACT = '__exact'
   GT = '__gt'
   GTE = '__gte'
   LT = '__lt'
@@ -23,12 +23,17 @@ class Lookup:
   INRANGE = '__inrange'
   ISNULL = '__isnull'
 
-  @staticmethod
-  def trim(parameter: str) -> str:
+  @classmethod
+  def trim(cls, kwarg_key: str) -> str:
     """
-    Trim lookup from a given parameter, assuming it ends with a valid lookup.
+    Trim valid lookup from the end of a key.
+    :param kwarg_key: Key to trim
     """
-    return re.search('(.+)__[a-z]+$', parameter).group(1)
+    lookups = [getattr(cls, attr) for attr in dir(cls) if attr.isupper()]
+    for lookup in lookups:
+      if kwarg_key.endswith(lookup):
+        return kwarg_key[:-len(lookup)]
+    return kwarg_key
 
 
 class Q:
@@ -45,14 +50,42 @@ class Q:
     self.kwargs = kwargs
 
   @property
-  def odsql(self):
+  def odsql(self) -> str:
     """
+    ODSQL representation of query expressions.
     """
     expressions = []
     for query in self.contains:
       expressions.append(f'"{query}"')
+    
+    has_filter_lookup = True
     for key, value in self.kwargs.items():
-      expressions.append(f'{key}={value}')
+      if key.endswith(Lookup.CONTAINS):
+        op, query = 'like', f'"{value}"'
+      elif key.endswith(Lookup.GT):
+        op, query = '>', value
+      elif key.endswith(Lookup.GTE):
+        op, query = '>=', value
+      elif key.endswith(Lookup.LT):
+        op, query = '<', value
+      elif key.endswith(Lookup.LTE):
+        op, query = '<=', value
+      elif key.endswith(Lookup.INRANGE):
+        op, query = 'in', value
+      elif key.endswith(Lookup.ISNULL):
+        op, query = 'is', f'{"" if value else "not "}null'
+      elif isinstance(value, bool):
+        op, query = 'is', str(value).lower()
+      else:
+        op, query = '=', value
+        has_filter_lookup = key.endswith(Lookup.EXACT)
+
+      if has_filter_lookup:
+        key = Lookup.trim(kwarg_key=key)
+      if key.endswith(Lookup.ESCAPE):
+        key = f'`{Lookup.trim(kwarg_key=key)}`'
+
+      expressions.append(f'{key} {op} {query}')
     return ' and '.join(expressions)
 
 
@@ -80,7 +113,7 @@ class Query(models.OpendatasoftCore):
     offset: int = 0,
     limit: int = 10,
     timezone: str = None
-  ) -> Dict:
+  ) -> dict:
     """
     Search datasets.
     :param offset: Index of the first item to return
@@ -102,7 +135,7 @@ class Query(models.OpendatasoftCore):
     json = self.get(url)
     return json
 
-  def aggregate(self, limit: str = None, timezone: str = None) -> Dict:
+  def aggregate(self, limit: str = None, timezone: str = None) -> dict:
     """
     Aggregate datasets.
     :param limit: Number of items to return
@@ -127,9 +160,7 @@ class Query(models.OpendatasoftCore):
     pass
   
   def facets(self):
-    """
-    Enumerate facets.
-    """
+    pass
 
   def metadata(self):
     pass
@@ -190,7 +221,7 @@ class Query(models.OpendatasoftCore):
     for key, value in kwargs.items():
       if key.endswith(Lookup.IN):
         self._exclude.extend(
-          f'{Lookup.trim(key)}:{item}' for item in value
+          f'{Lookup.trim(kwarg_key=key)}:{item}' for item in value
         )
       else:
         self._exclude.append(f'{key}:{value}')

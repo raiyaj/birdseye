@@ -26,7 +26,7 @@ class Opendatasoft:
     :param session: A session object with which to make API calls
     :param api_key: Opendatasoft API key for accessing private datasets
     :param timezone: Default timezone applied to datetime fields in queries and
-      responses. Default: `UTC`
+      responses
     """
     if not subdomain and not base_url:
       raise ValueError('`subdomain` and `base_url` cannot both be empty.')
