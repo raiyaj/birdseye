@@ -60,21 +60,32 @@ class Lookup:
 
 class Q:
   """
+  Complex querying with lookups and bitwise boolean operators
   """
   def __init__(self, **kwargs: Any) -> None:
+    """
+    :param **kwargs: Lookup parameters
+    """
     self.kwargs = kwargs
 
-  # def __and__(self, other: Q) -> ODSQL:
-  #   return f'{self.odsql} and {other.odsql}'
+    # Init vars for complex queries with (bitwise) boolean operators
+    self.chain = []
+    self.invert = False
 
-  # def __or__(self, other: Q) -> ODSQL:
-  #   return f'{self.odsql} or {other.odsql}'
+  def __and__(self, other: Q) -> Q:
+    self.chain.append(('and', other.odsql))
+    return self
 
-  # def __invert__(self) -> ODSQL:
-  #   return f'not {self.odsql}'
+  def __or__(self, other: Q) -> Q:
+    self.chain.append(('or', other.odsql))
+    return self
+
+  def __invert__(self) -> Q:
+    self.invert = True
+    return self
 
   @property
-  def odsql(self) -> str:
+  def odsql(self) -> ODSQL:
     """
     ODSQL representation of query expressions.
     """
@@ -118,7 +129,12 @@ class Q:
         else sep.join(f'{field} {op} {query}' for query in queries)
       )
 
-    return ' and '.join(expressions)
+    odsql = ' and '.join(expressions)
+    if self.invert:
+      odsql = f'not {odsql}'
+    for op, query in self.chain:
+      odsql = f'({odsql} {op} {query})'
+    return odsql
 
 
 class Query(models.OpendatasoftCore):
@@ -207,20 +223,14 @@ class Query(models.OpendatasoftCore):
     Filter rows.
     :param contains: Search terms, ANDed together. A wildcard (*) may be added
       at the end of a word.
-    :param args: Q expression(s) or a raw ODSQL query
-    :param kwargs:
+    :param *args: Q expressions or raw ODSQL queries
+    :param **kwargs: Lookup parameters
     """
-    q_expressions = (
-      f'({arg})'
-      if isinstance(arg, str) and ' or ' in arg
-      else arg
-      for arg in args
-    )
     expressions = (
       expression.odsql
       if isinstance(expression, Q)
       else expression
-      for expression in [*q_expressions, Q(**kwargs)]
+      for expression in [*args, Q(**kwargs)]
     )
     self._where.append(' and '.join(filter(None, expressions)))
     return self._clone()

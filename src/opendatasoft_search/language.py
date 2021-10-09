@@ -23,8 +23,7 @@ def geom(geometry: Union[str, dict]) -> Geometry:
 
 
 ## ##
-
-def interval(
+def range(
   start: Union[int, Date],
   end: Union[int, Date],
   notation: str = '[]'
