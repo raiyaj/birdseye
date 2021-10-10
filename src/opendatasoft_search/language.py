@@ -2,9 +2,48 @@ import json
 from typing import NewType, Union
 
 
+KEYWORDS = [
+  'and',
+  'as',
+  'asc',
+  'avg',
+  'by',
+  'count',
+  'date_format',
+  'day',
+  'dayofweek',
+  'desc',
+  'equi',
+  'false',
+  'group',
+  'hour',
+  'or',
+  'limit',
+  'lower',
+  'max',
+  'millisecond',
+  'min',
+  'minute',
+  'month',
+  'not',
+  'null',
+  'quarter',
+  'range',
+  'second',
+  'select',
+  'sum',
+  'top',
+  'true',
+  'upper',
+  'where',
+  'year'
+]
+
+
 ## Literals ##
 
 Date = NewType('Date', str)
+Geometry = NewType('Geometry', str)
 
 def date(date: str) -> Date:
   """
@@ -12,18 +51,20 @@ def date(date: str) -> Date:
   """
   return f"date'{date}'"
 
-
-Geometry = NewType('Geometry', str)
-
 def geom(geometry: Union[str, dict]) -> Geometry:
   """
   :param geometry: A WKT/WKB or GeoJSON geometry expression
   """
-  return f"geom'{geometry if isinstance(geometry, str) else json.dumps(geometry)}'"
+  geometry = json.dumps(geometry) if isinstance(geometry, dict) else geometry
+  return f"geom'{geometry}'"
 
 
-## ##
-def range(
+## Scalar functions ##
+
+
+## Filter functions ##
+
+def interval(
   start: Union[int, Date],
   end: Union[int, Date],
   notation: str = '[]'

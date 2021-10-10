@@ -4,6 +4,7 @@ from copy import deepcopy
 import logging
 from typing import Any, List, NewType, Optional, Tuple, Union
 
+from . import language
 from . import models
 
 logger = logging.getLogger(__package__)
@@ -12,12 +13,6 @@ ODSQL = NewType('ODSQL', str)
 
 
 class Lookup:
-  ## Non field lookups ##
-  NON_FIELD_CONTAINS = '__contains__'
-
-  ## Meta field lookups ##
-  KEYWORD = '__keyword__'
-
   ## Field lookups ##
   CONTAINS = '__contains'
   EXACT = '__exact'
@@ -28,7 +23,10 @@ class Lookup:
   IN = '__in'
   INRANGE = '__inrange'
   ISNULL = '__isnull'
-  FIELD_LOOKUPS = [CONTAINS, EXACT, GT, GTE, LT, LT, IN, INRANGE, ISNULL]
+  FIELD_LOOKUPS = [CONTAINS, EXACT, GT, GTE, LT, LTE, IN, INRANGE, ISNULL]
+
+  ## Meta (non-field) lookups ##
+  META_CONTAINS = '__contains__'
 
   @classmethod
   def parse(cls, key: str) -> Tuple[Optional[str], Optional[str]]:
@@ -36,11 +34,8 @@ class Lookup:
     Search for and trim a lookup from a key.
     :returns: (trimmed key, lookup)
     """
-    if key == cls.NON_FIELD_CONTAINS:
-      return None, cls.NON_FIELD_CONTAINS
-
-    if key.startswith(cls.KEYWORD):
-      key = f'`{cls.trim(key, cls.KEYWORD, trim_start=True)}`'
+    if key == cls.META_CONTAINS:
+      return None, cls.META_CONTAINS
 
     for lookup in cls.FIELD_LOOKUPS:
       if key.endswith(lookup):
@@ -49,61 +44,68 @@ class Lookup:
     return key, None
 
   @classmethod
-  def trim(cls, key: str, lookup: str, trim_start: bool = False) -> str:
+  def trim(cls, key: str, lookup: str) -> str:
     """
-    Trim a lookup from a key.
+    Trim a field lookup from the end of a key.
     """
-    if trim_start:
-      return key[len(lookup):]
     return key[:-len(lookup)]
 
 
 class Q:
   """
-  Complex querying with lookups and bitwise boolean operators
+  Complex queries using lookups, and combined with bitwise boolean operators
   """
+
   def __init__(self, **kwargs: Any) -> None:
     """
     :param **kwargs: Lookup parameters
     """
     self.kwargs = kwargs
-
-    # Init vars for complex queries with (bitwise) boolean operators
-    self.chain = []
-    self.invert = False
+    self.raw = ''
 
   def __and__(self, other: Q) -> Q:
-    self.chain.append(('and', other.odsql))
-    return self
+    q = Q()
+    q.raw = f'{self.odsql} and {other.odsql}'
+    return q
 
   def __or__(self, other: Q) -> Q:
-    self.chain.append(('or', other.odsql))
-    return self
+    q = Q()
+    # Include parentheses because `and` has precedence over `or`
+    q.raw = f'({self.odsql} or {other.odsql})'
+    return q
 
   def __invert__(self) -> Q:
-    self.invert = True
+    odsql = self.odsql
+    if odsql.startswith('(') and odsql.endswith(')'):
+      odsql = odsql.strip(__chars='()')
+    self.raw = f'not ({odsql})'
     return self
 
   @property
-  def odsql(self) -> ODSQL:
+  def odsql(self) -> Optional[ODSQL]:
     """
     ODSQL representation of query expressions.
     """
+    if self.raw:
+      return self.raw
+
+    if not self.kwargs:
+      return None
+
     expressions = []
     for key, value in self.kwargs.items():
-      field, lookup = Lookup.parse(key)
+      field_name, lookup = Lookup.parse(key)
 
-      # Handle non-field lookups
-      if lookup == Lookup.NON_FIELD_CONTAINS:
-        expressions.append(f'"{value}"')
-        continue
+      if not field_name:
+        raise ValueError(f"Invalid lookup parameter '{key}'")
 
-      # Handle field lookups
-      query = None
+      # Escape keywords
+      if field_name in language.KEYWORDS:
+        field_name = f'`{field_name}`'
+
+      # Handle lookups
       if lookup == Lookup.CONTAINS:
         op, query = 'like', f'"{value}"'
-      elif lookup == Lookup.EXACT:
-        op, query = '=', value
       elif lookup == Lookup.GT:
         op, query = '>', value
       elif lookup == Lookup.GTE:
@@ -113,28 +115,26 @@ class Q:
       elif lookup == Lookup.LTE:
         op, query = '<=', value
       elif lookup == Lookup.IN:
-        op, queries, sep = '=', value, ' or '
+        op = '='
+        expression = ' or '.join(
+          f'{field_name} {op} {query}' for query in value
+        )
+        expressions.append(f'({expression})')
+        continue
       elif lookup == Lookup.INRANGE:
         op, query = 'in', value
       elif lookup == Lookup.ISNULL:
         op, query = 'is', f'{"" if value else "not "}null'
       elif isinstance(value, bool):
         op, query = 'is', str(value).lower()
+      elif lookup == Lookup.META_CONTAINS:
+        expressions.append(f'"{value}"')
+        continue
       else:
         op, query = '=', value
 
-      expressions.append(
-        f'{field} {op} {query}'
-        if query
-        else sep.join(f'{field} {op} {query}' for query in queries)
-      )
-
-    odsql = ' and '.join(expressions)
-    if self.invert:
-      odsql = f'not {odsql}'
-    for op, query in self.chain:
-      odsql = f'({odsql} {op} {query})'
-    return odsql
+      expressions.append(f'{field_name} {op} {query}')
+    return " and ".join(expressions)
 
 
 class Query(models.OpendatasoftCore):
@@ -170,7 +170,7 @@ class Query(models.OpendatasoftCore):
       responses
     """
     url = self.build_url(
-      *self._get_path_parts(endpoint='search'),
+      *self._path_parts(endpoint='search'),
       self.build_querystring(
         where=self._where,
         refine=self._refine,
@@ -191,7 +191,7 @@ class Query(models.OpendatasoftCore):
       responses
     """
     url = self.build_url(
-      *self._get_path_parts(endpoint='aggregate'),
+      *self._path_parts(endpoint='aggregate'),
       'aggregates',
       self.build_querystring(
         limit=limit,
@@ -211,7 +211,7 @@ class Query(models.OpendatasoftCore):
     pass
 
   def metadata(self):
-    pass
+    raise NotImplementedError()
 
   ## ODSQL filters ##
 
@@ -232,8 +232,9 @@ class Query(models.OpendatasoftCore):
       else expression
       for expression in [*args, Q(**kwargs)]
     )
-    self._where.append(' and '.join(filter(None, expressions)))
-    return self._clone()
+    clone = self._clone()
+    clone._where.append(' and '.join(filter(None, expressions)))
+    return clone
 
   def group_by(self):
     pass
@@ -246,33 +247,34 @@ class Query(models.OpendatasoftCore):
   def refine(self, **kwargs: Any) -> Query:
     """
     Limit results by refining on the given facet values, ANDed together.
-    :param **kwargs: Facet names and values
+    :param **kwargs: Facet parameters
     """
-    self._refine.extend(
-      f'{key}:{value}'
-      for key, value in kwargs.items()
-    )
-    return self._clone()
+    clone = self._clone()
+    clone._refine.extend(f'{key}:{value}' for key, value in kwargs.items())
+    return clone
 
   def exclude(self, **kwargs: Any) -> Query:
     """
     Limit results by excluding the given facet values, ANDed together.
-    :param **kwargs: Facet names and values, compatible with `in` lookups
+    :param **kwargs: Facet parameters, compatible with `in` lookups
     """
+    clone = self._clone()
     for key, value in kwargs.items():
       if key.endswith(Lookup.IN):
-        self._exclude.extend(
-          f'{Lookup.trim(key, Lookup.IN)}:{item}' for item in value
-        )
+        facet_name, _ = Lookup.trim(key, Lookup.IN)
+        if not facet_name:
+          raise ValueError("Invalid facet parameter '{key}'")
       else:
-        self._exclude.append(f'{key}:{value}')
-    return self._clone()
+        facet_name = key
+        value = [value]
+      clone._exclude.extend(f'{facet_name}:{item}' for item in value)
+    return clone
 
 
 class CatalogQuery(Query):
   """Interface for the Catalog API"""
 
-  def _get_path_parts(self, endpoint: str) -> List[str]:
+  def _path_parts(self, endpoint: str) -> List[str]:
     if endpoint == 'search':
       return ['datasets']
     return []
@@ -294,7 +296,7 @@ class DatasetQuery(Query):
     self.dataset_id = kwargs.pop('dataset_id')
     super().__init__(**kwargs)
 
-  def _get_path_parts(self, endpoint: str) -> List[str]:
+  def _path_parts(self, endpoint: str) -> List[str]:
     path_parts = ['datasets', self.dataset_id]
     if endpoint == 'search':
       path_parts.append('records')

@@ -8,6 +8,8 @@ logger = logging.getLogger(__package__)
 
 
 class OpendatasoftCore:
+  """Core API interface"""
+
   def __init__(
     self, base_url: str, session: requests.Session, source: str
   ) -> None:
