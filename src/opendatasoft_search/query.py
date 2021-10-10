@@ -4,7 +4,7 @@ from copy import deepcopy
 import logging
 from typing import Any, List, NewType, Optional, Tuple, Union
 
-from . import language
+from . import language as lang
 from . import models
 
 logger = logging.getLogger(__package__)
@@ -16,6 +16,7 @@ class Lookup:
   ## Field-level lookups ##
   CONTAINS = '__contains'
   EXACT = '__exact'
+  FUNC = '__func'
   GT = '__gt'
   GTE = '__gte'
   LT = '__lt'
@@ -28,7 +29,7 @@ class Lookup:
   ROW_CONTAINS = '__contains__'
 
   # Optional prefix for escaping field names
-  ESCAPE_PREFIX = '__esc__'
+  ESC = '__esc__'
 
   @classmethod
   def parse(cls, key: str) -> Tuple[str, Optional[str]]:
@@ -37,8 +38,8 @@ class Lookup:
     :param key: Key to parse
     :returns: (trimmed key, lookup or None)
     """
-    if key.startswith(cls.ESCAPE_PREFIX):
-      key = cls.trim(key, cls.ESCAPE_PREFIX, from_start=True)
+    if key.startswith(cls.ESC):
+      key = cls.trim(key, cls.ESC, from_start=True)
 
     lookups = [getattr(cls, attr) for attr in dir(cls) if attr.isupper()]
     for lookup in lookups:
@@ -47,8 +48,8 @@ class Lookup:
 
     return key, None
 
-  @classmethod
-  def trim(cls, key: str, lookup: str, from_start: bool = False) -> str:
+  @staticmethod
+  def trim(key: str, lookup: str, from_start: bool = False) -> str:
     """
     Trim a lookup from a key.
     :param key: Key to trim
@@ -85,6 +86,7 @@ class Q:
 
   def __invert__(self) -> Q:
     odsql = self.odsql
+    # Include parentheses because inversion may apply to > 1 expression
     if odsql.startswith('(') and odsql.endswith(')'):
       odsql = odsql.strip(__chars='()')
     self.raw = f'not ({odsql})'
@@ -109,12 +111,15 @@ class Q:
         raise ValueError(f"Invalid lookup parameter '{key}'")
 
       # Escape field names
-      if field_name in language.KEYWORDS or field_name.isdigit():
+      if field_name in lang.KEYWORDS or field_name.isdigit():
         field_name = f'`{field_name}`'
 
       # Handle lookups
+      expression = None
       if lookup == Lookup.CONTAINS:
-        op, query = 'like', f'"{value}"'
+        op, query = 'like', lang.str(value)
+      elif lookup == Lookup.FUNC:
+        expression = value.format(field_name)
       elif lookup == Lookup.GT:
         op, query = '>', value
       elif lookup == Lookup.GTE:
@@ -124,31 +129,32 @@ class Q:
       elif lookup == Lookup.LTE:
         op, query = '<=', value
       elif lookup == Lookup.IN:
-        op = '='
-        expression = ' or '.join(
-          f'{field_name} {op} {query}' for query in value
+        queries = (
+          lang.str(query)
+          if isinstance(query, str)
+          else query
+          for query in value
         )
-        expressions.append(f'({expression})')
-        continue
+        expression = ' or '.join(f'{field_name} = {query}' for query in queries)
+        expression = f'({expression})'
       elif lookup == Lookup.INRANGE:
         op, query = 'in', value
       elif lookup == Lookup.ISNULL:
         op, query = 'is', f'{"" if value else "not "}null'
+      elif lookup == Lookup.ROW_CONTAINS:
+        expression = lang.str(value)
       elif isinstance(value, bool):
         op, query = 'is', str(value).lower()
-      elif lookup == Lookup.ROW_CONTAINS:
-        expressions.append(f'"{value}"')
-        continue
       else:
-        op, query = '=', f'"{value}"' if isinstance(value, str) else value
+        op, query = '=', lang.str(value) if isinstance(value, str) else value
 
-      expressions.append(f'{field_name} {op} {query}')
+      expressions.append(expression or f'{field_name} {op} {query}')
     return " and ".join(expressions)
 
 
 class Query(models.OpendatasoftCore):
-  """
-  """
+  """Base class for the ORM's public API"""
+
   def __init__(self, **kwargs) -> None:
     self.timezone = kwargs.pop('timezone')
     super().__init__(**kwargs)
@@ -230,8 +236,6 @@ class Query(models.OpendatasoftCore):
   def where(self, *args: Union[Q, ODSQL], **kwargs: Any) -> Query:
     """
     Filter rows.
-    :param contains: Search terms, ANDed together. A wildcard (*) may be added
-      at the end of a word.
     :param *args: Q expressions or raw ODSQL queries
     :param **kwargs: Lookup parameters
     """
@@ -270,7 +274,7 @@ class Query(models.OpendatasoftCore):
     clone = self._clone()
     for key, value in kwargs.items():
       if key.endswith(Lookup.IN):
-        facet_name, _ = Lookup.trim(key, Lookup.IN)
+        facet_name = Lookup.trim(key, Lookup.IN)
         if not facet_name:
           raise ValueError("Invalid facet parameter '{key}'")
       else:
