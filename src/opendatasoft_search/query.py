@@ -13,7 +13,7 @@ ODSQL = NewType('ODSQL', str)
 
 
 class Lookup:
-  ## Field lookups ##
+  ## Field-level lookups ##
   CONTAINS = '__contains'
   EXACT = '__exact'
   GT = '__gt'
@@ -23,31 +23,40 @@ class Lookup:
   IN = '__in'
   INRANGE = '__inrange'
   ISNULL = '__isnull'
-  FIELD_LOOKUPS = [CONTAINS, EXACT, GT, GTE, LT, LTE, IN, INRANGE, ISNULL]
 
-  ## Meta (non-field) lookups ##
-  META_CONTAINS = '__contains__'
+  ## Row-level (non-field) lookups ##
+  ROW_CONTAINS = '__contains__'
+
+  # Optional prefix for escaping field names
+  ESCAPE_PREFIX = '__esc__'
 
   @classmethod
-  def parse(cls, key: str) -> Tuple[Optional[str], Optional[str]]:
+  def parse(cls, key: str) -> Tuple[str, Optional[str]]:
     """
     Search for and trim a lookup from a key.
-    :returns: (trimmed key, lookup)
+    :param key: Key to parse
+    :returns: (trimmed key, lookup or None)
     """
-    if key == cls.META_CONTAINS:
-      return None, cls.META_CONTAINS
+    if key.startswith(cls.ESCAPE_PREFIX):
+      key = cls.trim(key, cls.ESCAPE_PREFIX, from_start=True)
 
-    for lookup in cls.FIELD_LOOKUPS:
+    lookups = [getattr(cls, attr) for attr in dir(cls) if attr.isupper()]
+    for lookup in lookups:
       if key.endswith(lookup):
         return cls.trim(key, lookup), lookup
 
     return key, None
 
   @classmethod
-  def trim(cls, key: str, lookup: str) -> str:
+  def trim(cls, key: str, lookup: str, from_start: bool = False) -> str:
     """
-    Trim a field lookup from the end of a key.
+    Trim a lookup from a key.
+    :param key: Key to trim
+    :param lookup: Lookup to remove
+    :param from_start: Trim from the start of the key
     """
+    if from_start:
+      return key[len(lookup):]
     return key[:-len(lookup)]
 
 
@@ -99,8 +108,8 @@ class Q:
       if not field_name:
         raise ValueError(f"Invalid lookup parameter '{key}'")
 
-      # Escape keywords
-      if field_name in language.KEYWORDS:
+      # Escape field names
+      if field_name in language.KEYWORDS or field_name.isdigit():
         field_name = f'`{field_name}`'
 
       # Handle lookups
@@ -127,11 +136,11 @@ class Q:
         op, query = 'is', f'{"" if value else "not "}null'
       elif isinstance(value, bool):
         op, query = 'is', str(value).lower()
-      elif lookup == Lookup.META_CONTAINS:
+      elif lookup == Lookup.ROW_CONTAINS:
         expressions.append(f'"{value}"')
         continue
       else:
-        op, query = '=', value
+        op, query = '=', f'"{value}"' if isinstance(value, str) else value
 
       expressions.append(f'{field_name} {op} {query}')
     return " and ".join(expressions)
