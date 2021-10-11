@@ -65,18 +65,71 @@ def geom(geometry: Union[str, dict]) -> Geometry:
 def str(string: str) -> String:
   """
   String literal
-  :param string: String
+  :param string: A string
   """
-  # If string is a Date or Geometry literal, return unchanged
+  # If string is a date or geometry literal, return it unchanged
   if re.match(r"^date'.*'$", string) or re.match(r"^geom'.*'$", string):
     return string
   return f'"{string}"'
+
+
+## Enums ##
+
+class Set:
+  DISJOINT = 'disjoint'
+  INTERSECTS = 'intersects'
+  WITHIN = 'within'
+
+class Unit:
+  MILES = 'mi'
+  YARDS = 'yd'
+  FEET = 'ft'
+  METERS = 'm'
+  KILOMETERS = 'km'
+  CENTIMETERS = 'cm'
+  MILLIMETERS = 'mm'
 
 
 ## Scalar functions ##
 
 
 ## Filter functions ##
+## Use with the `inarea` lookup to filter on whether a field is within a
+## geographical area.
 
-def range():
+def circle(
+  center: Geometry,
+  radius: Union[int, float],
+  unit: str = Unit.METERS
+) -> str:
+  """
+  :param center: Center of the circle 
+  :param radius: Radius of the circle
+  :param unit: Radius units
+  """
+  return f'distance({{}}, {center}, {radius}{unit})'
+
+def geometry(area: Geometry, mode: str = Set.WITHIN) -> str:
+  """
+  For comparison with fields of type geo_shape
+  :param area: Geographical area
+  :param mode: Set mode that defines how the geo_shape field is compared with
+    the geographical area
+  """
+  return f'geometry({{}}, {area}, {mode})'
+
+def polygon(area: Geometry) -> str:
+  """
+  For comparison with fields of type geo_point
+  :param area: Geographical area
+  """
+  return f'polygon({{}}, {area})'
+
+
+## Ranges ##
+
+def drange():
+  pass
+
+def srange():
   pass

@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
-import logging
 from typing import Any, List, NewType, Optional, Tuple, Union
 
 from . import language as lang
 from . import models
-
-logger = logging.getLogger(__package__)
 
 ODSQL = NewType('ODSQL', str)
 
@@ -16,16 +13,16 @@ class Lookup:
   ## Field-level lookups ##
   CONTAINS = '__contains'
   EXACT = '__exact'
-  FUNC = '__func'
   GT = '__gt'
   GTE = '__gte'
   LT = '__lt'
   LTE = '__lte'
   IN = '__in'
+  INAREA = '__inarea'
   INRANGE = '__inrange'
   ISNULL = '__isnull'
 
-  ## Row-level (non-field) lookups ##
+  ## Row-level lookups ##
   ROW_CONTAINS = '__contains__'
 
   # Optional prefix for escaping field names
@@ -95,7 +92,7 @@ class Q:
   @property
   def odsql(self) -> Optional[ODSQL]:
     """
-    ODSQL representation of query expressions.
+    ODSQL representation of query expressions
     """
     if self.raw:
       return self.raw
@@ -118,8 +115,6 @@ class Q:
       expression = None
       if lookup == Lookup.CONTAINS:
         op, query = 'like', lang.str(value)
-      elif lookup == Lookup.FUNC:
-        expression = value.format(field_name)
       elif lookup == Lookup.GT:
         op, query = '>', value
       elif lookup == Lookup.GTE:
@@ -137,6 +132,8 @@ class Q:
         )
         expression = ' or '.join(f'{field_name} = {query}' for query in queries)
         expression = f'({expression})'
+      elif lookup == Lookup.INAREA:
+        expression = value.format(field_name)
       elif lookup == Lookup.INRANGE:
         op, query = 'in', value
       elif lookup == Lookup.ISNULL:
@@ -153,7 +150,7 @@ class Q:
 
 
 class Query(models.OpendatasoftCore):
-  """Base class for the ORM's public API"""
+  """ORM base class"""
 
   def __init__(self, **kwargs) -> None:
     self.timezone = kwargs.pop('timezone')
@@ -235,7 +232,7 @@ class Query(models.OpendatasoftCore):
 
   def where(self, *args: Union[Q, ODSQL], **kwargs: Any) -> Query:
     """
-    Filter rows.
+    Filter results.
     :param *args: Q expressions or raw ODSQL queries
     :param **kwargs: Lookup parameters
     """
