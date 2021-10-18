@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import re
 from typing import Any, List, NewType, Optional, Tuple, Union
 
 from . import language as lang
@@ -10,8 +11,8 @@ ODSQL = NewType('ODSQL', str)
 
 
 class Lookup:
-  ## Field-level lookups ##
-  CONTAINS = '__contains'
+  ## Lookups ##
+  CONTAINS = '__contains'  # A field-level and row-level lookup
   EXACT = '__exact'
   GT = '__gt'
   GTE = '__gte'
@@ -22,23 +23,24 @@ class Lookup:
   INRANGE = '__inrange'
   ISNULL = '__isnull'
 
-  ## Row-level lookups ##
-  ROW_CONTAINS = '__contains__'
-
   # Optional prefix for escaping field names
   ESC = '__esc__'
 
   @classmethod
-  def parse(cls, key: str) -> Tuple[str, Optional[str]]:
+  def parse(cls, key: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Search for and trim a lookup from a key.
     :param key: Key to parse
-    :returns: (trimmed key, lookup or None)
+    :returns: (trimmed key, lookup)
     """
+    if key == cls.CONTAINS:
+      return None, cls.CONTAINS  # Row-level CONTAINS
+
     if key.startswith(cls.ESC):
       key = cls.trim(key, cls.ESC, from_start=True)
 
     lookups = [getattr(cls, attr) for attr in dir(cls) if attr.isupper()]
+    lookups.remove(cls.ESC)
     for lookup in lookups:
       if key.endswith(lookup):
         return cls.trim(key, lookup), lookup
@@ -53,9 +55,10 @@ class Lookup:
     :param lookup: Lookup to remove
     :param from_start: Trim from the start of the key
     """
-    if from_start:
-      return key[len(lookup):]
-    return key[:-len(lookup)]
+    trimmed = key[len(lookup):] if from_start else key[:-len(lookup)]
+    if not trimmed:
+      raise ValueError(f"Invalid lookup parameter '{key}'")
+    return trimmed
 
 
 class Q:
@@ -71,23 +74,27 @@ class Q:
     self.raw = ''
 
   def __and__(self, other: Q) -> Q:
+    """a & b"""
     q = Q()
     q.raw = f'{self.odsql} and {other.odsql}'
     return q
 
   def __or__(self, other: Q) -> Q:
+    """a | b"""
     q = Q()
     # Include parentheses because `and` has precedence over `or`
     q.raw = f'({self.odsql} or {other.odsql})'
     return q
 
   def __invert__(self) -> Q:
+    """~a"""
+    q = Q()
     odsql = self.odsql
     # Include parentheses because inversion may apply to > 1 expression
-    if odsql.startswith('(') and odsql.endswith(')'):
-      odsql = odsql.strip(__chars='()')
-    self.raw = f'not ({odsql})'
-    return self
+    if not (odsql.startswith('(') and odsql.endswith(')')):
+      odsql = f'({odsql})'
+    q.raw = f'not {self.odsql}'
+    return q
 
   @property
   def odsql(self) -> Optional[ODSQL]:
@@ -104,16 +111,16 @@ class Q:
     for key, value in self.kwargs.items():
       field_name, lookup = Lookup.parse(key)
 
-      if not field_name:
-        raise ValueError(f"Invalid lookup parameter '{key}'")
-
       # Escape field names
-      if field_name in lang.KEYWORDS or field_name.isdigit():
-        field_name = f'`{field_name}`'
+      if field_name:
+        if field_name in lang.KEYWORDS or field_name.isdigit():
+          field_name = f'`{field_name}`'
 
       # Handle lookups
       expression = None
-      if lookup == Lookup.CONTAINS:
+      if lookup == Lookup.CONTAINS and field_name is None:
+        expression = lang.str(value)  # Row-level CONTAINS
+      elif lookup == Lookup.CONTAINS:
         op, query = 'like', lang.str(value)
       elif lookup == Lookup.GT:
         op, query = '>', value
@@ -138,8 +145,6 @@ class Q:
         op, query = 'in', value
       elif lookup == Lookup.ISNULL:
         op, query = 'is', f'{"" if value else "not "}null'
-      elif lookup == Lookup.ROW_CONTAINS:
-        expression = lang.str(value)
       elif isinstance(value, bool):
         op, query = 'is', str(value).lower()
       else:
@@ -271,13 +276,10 @@ class Query(models.OpendatasoftCore):
     clone = self._clone()
     for key, value in kwargs.items():
       if key.endswith(Lookup.IN):
-        facet_name = Lookup.trim(key, Lookup.IN)
-        if not facet_name:
-          raise ValueError("Invalid facet parameter '{key}'")
+        key = Lookup.trim(key, Lookup.IN)
       else:
-        facet_name = key
         value = [value]
-      clone._exclude.extend(f'{facet_name}:{item}' for item in value)
+      clone._exclude.extend(f'{key}:{item}' for item in value)
     return clone
 
 
