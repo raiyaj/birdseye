@@ -1,9 +1,8 @@
 from setuptools import setup
 
 setup(
-  name='opendatasoft-search',
+  name='ods-explore',
   version='1.0.0',
-  packages=['opendatasoft_search'],
-  package_dir={'': 'src'},
+  packages=['ods_explore'],
   install_requires=['requests']
 )
