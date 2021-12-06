@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-import re
 from typing import Any, List, NewType, Optional, Tuple, Union
 
 from . import language as lang
@@ -158,7 +157,10 @@ class Query(models.OpendatasoftCore):
   """ORM base class"""
 
   def __init__(self, **kwargs) -> None:
-    self.timezone = kwargs.pop('timezone')
+    self.settings = {
+      'lang': kwargs.pop('lang'),
+      'timezone': kwargs.pop('timezone')
+    }
     super().__init__(**kwargs)
 
     self._select = []
@@ -173,61 +175,29 @@ class Query(models.OpendatasoftCore):
 
   ## API endpoints ##
 
-  def search(
-    self,
-    offset: int = 0,
-    limit: int = 10,
-    timezone: str = None
-  ) -> dict:
-    """
-    Search datasets.
-    :param offset: Index of the first item to return
-    :param limit: Number of items to return
-    :param timezone: Timezone applied to datetime fields in queries and
-      responses
-    """
-    url = self.build_url(
-      *self._path_parts(endpoint='search'),
+  def url(self, path: str, **kwargs: Any) -> str:
+    # TODO: filter out overwritten defaults
+    return self.build_url(
+      path,
       self.build_querystring(
+        select=self._select,
         where=self._where,
+        group_by=self._group_by,
+        order_by=self._order_by,
         refine=self._refine,
         exclude=self._exclude,
-        offset=offset,
-        limit=limit,
-        timezone=timezone or self.timezone
+        **self.settings,
+        **kwargs
       )
     )
-    json = self.get(url)
-    return json
-
-  def aggregate(self, limit: str = None, timezone: str = None) -> dict:
-    """
-    Aggregate datasets.
-    :param limit: Number of items to return
-    :param timezone: Timezone applied to datetime fields in queries and
-      responses
-    """
-    url = self.build_url(
-      *self._path_parts(endpoint='aggregate'),
-      'aggregates',
-      self.build_querystring(
-        limit=limit,
-        timezone=timezone or self.timezone
-      )
-    )
-    json = self.get(url)
-    return json
 
   def export(self):
     raise NotImplementedError()
-
-  def lookup(self):
-    pass
   
   def facets(self):
-    pass
+    raise NotImplementedError()
 
-  def metadata(self):
+  def attachments(self):
     raise NotImplementedError()
 
   ## ODSQL filters ##
@@ -235,7 +205,7 @@ class Query(models.OpendatasoftCore):
   def select(self):
     pass
 
-  def where(self, *args: Union[Q, ODSQL], **kwargs: Any) -> Query:
+  def filter(self, *args: Union[Q, ODSQL], **kwargs: Any) -> Query:
     """
     Filter results.
     :param *args: Q expressions or raw ODSQL queries
@@ -286,19 +256,16 @@ class Query(models.OpendatasoftCore):
 class CatalogQuery(Query):
   """Interface for the Catalog API"""
 
-  def _path_parts(self, endpoint: str) -> List[str]:
-    if endpoint == 'search':
-      return ['datasets']
-    return []
-
   def dataset(self, dataset_id: str) -> DatasetQuery:
     return DatasetQuery(
       dataset_id=dataset_id,
       base_url=self.base_url,
       session=self.session,
-      source=self.source,
-      timezone=self.timezone
+      **self.settings
     )
+
+  def datasets(self) -> dict:
+    return self.get(self.url(path='datasets'))
 
 
 class DatasetQuery(Query):
@@ -306,10 +273,30 @@ class DatasetQuery(Query):
 
   def __init__(self, **kwargs) -> None:
     self.dataset_id = kwargs.pop('dataset_id')
+    self.base_path = f'datasets/{self.dataset_id}'
     super().__init__(**kwargs)
 
-  def _path_parts(self, endpoint: str) -> List[str]:
-    path_parts = ['datasets', self.dataset_id]
-    if endpoint == 'search':
-      path_parts.append('records')
-    return path_parts
+  def record(self, record_id: str) -> RecordQuery:
+    return RecordQuery(
+      record_id=record_id,
+      base_path=self.base_path,
+      base_url=self.base_url,
+      session=self.session,
+      **self.settings
+    )
+
+  def read(self) -> dict:
+    return self.get(self.url(path=self.base_path))
+
+  def records(self) -> dict:
+    return self.get(self.url(path=f'{self.base_path}/records'))
+
+
+class RecordQuery(Query):
+  def __init__(self, **kwargs) -> None:
+    self.record_id = kwargs.pop('record_id')
+    self.base_path = kwargs.pop('base_path') + f'/records/{self.record_id}'
+    super().__init__(**kwargs)
+
+  def read(self) -> dict:
+    return self.get(self.url(path=self.base_path))

@@ -11,15 +11,15 @@ class OpendatasoftCore:
   """Core API interface"""
 
   def __init__(
-    self, base_url: str, session: requests.Session, source: str
+    self, base_url: str, session: requests.Session, resource: str = 'catalog',
   ) -> None:
     self.base_url = base_url
     self.session = session
-    self.source = source
+    self.resource = resource
 
   @property
   def api_url(self) -> str:
-    return f'{self.base_url}/api/v2/{self.source}'
+    return f'{self.base_url}/api/v2/{self.resource}'
 
   def build_querystring(self, **kwargs: Any) -> str:
     """
@@ -49,15 +49,12 @@ class Dataset(NamedTuple):
 
 
 class Record(NamedTuple):
-  id: str
-  timestamp: datetime
-  size: int
-  fields: Dict
+  pass
 
 
 class Facet(NamedTuple):
   pass
 
 
-class Metadata(NamedTuple):
+class Attachment(NamedTuple):
   pass
