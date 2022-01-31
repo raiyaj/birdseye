@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, List, NewType, Optional, Tuple, Union
+from typing import Any, NewType, Optional, Tuple, Union
+import urllib.parse
 
 from . import language as lang
 from . import models
@@ -22,7 +23,7 @@ class Lookup:
   INRANGE = '__inrange'
   ISNULL = '__isnull'
 
-  # Optional prefix for escaping field names
+  # Optional prefix for escaping field names that are Python keywords
   ESC = '__esc__'
 
   @classmethod
@@ -175,10 +176,10 @@ class Query(models.OpendatasoftCore):
 
   ## API endpoints ##
 
-  def url(self, path: str, **kwargs: Any) -> str:
-    # TODO: filter out overwritten defaults
-    return self.build_url(
-      path,
+  def url(self, decode: bool = False, **kwargs: Any) -> str:
+    # TODO: filter out overwritten default settings
+    url = self.build_url(
+      self.base_path,
       self.build_querystring(
         select=self._select,
         where=self._where,
@@ -190,6 +191,10 @@ class Query(models.OpendatasoftCore):
         **kwargs
       )
     )
+    return urllib.parse.unquote_plus(url) if decode else url
+
+  def get(self, **kwargs: Any) -> dict:
+    return super().get(self.url(**kwargs))
 
   def export(self):
     raise NotImplementedError()
@@ -256,6 +261,13 @@ class Query(models.OpendatasoftCore):
 class CatalogQuery(Query):
   """Interface for the Catalog API"""
 
+  def __init__(self, **kwargs) -> None:
+    super().__init__(**kwargs)
+
+    self.base_path = ''
+    self.datasets = self._clone()
+    self.datasets.base_path = 'datasets'
+
   def dataset(self, dataset_id: str) -> DatasetQuery:
     return DatasetQuery(
       dataset_id=dataset_id,
@@ -264,17 +276,21 @@ class CatalogQuery(Query):
       **self.settings
     )
 
-  def datasets(self) -> dict:
-    return self.get(self.url(path='datasets'))
+  def datasets(self) -> CatalogQuery:
+    self.base_path += '/datasets'
+    return self
 
 
 class DatasetQuery(Query):
-  """Interface for the Dataset API"""
+  """Interface for the Dataset API""" 
 
   def __init__(self, **kwargs) -> None:
     self.dataset_id = kwargs.pop('dataset_id')
-    self.base_path = f'datasets/{self.dataset_id}'
     super().__init__(**kwargs)
+
+    self.base_path = f'datasets/{self.dataset_id}'
+    self.records = self._clone()
+    self.records.base_path += '/records'
 
   def record(self, record_id: str) -> RecordQuery:
     return RecordQuery(
@@ -285,18 +301,9 @@ class DatasetQuery(Query):
       **self.settings
     )
 
-  def read(self) -> dict:
-    return self.get(self.url(path=self.base_path))
-
-  def records(self) -> dict:
-    return self.get(self.url(path=f'{self.base_path}/records'))
-
 
 class RecordQuery(Query):
   def __init__(self, **kwargs) -> None:
     self.record_id = kwargs.pop('record_id')
     self.base_path = kwargs.pop('base_path') + f'/records/{self.record_id}'
     super().__init__(**kwargs)
-
-  def read(self) -> dict:
-    return self.get(self.url(path=self.base_path))

@@ -1,7 +1,6 @@
-from datetime import datetime
 import logging
 import requests
-from typing import Any, Dict, NamedTuple
+from typing import Any, NamedTuple
 import urllib.parse
 
 logger = logging.getLogger(__package__)
