@@ -31,8 +31,6 @@ class Opendatasoft:
     :param timezone: Default timezone applied to datetime fields in queries and
       responses
     """
-    if not subdomain and not base_url:
-      raise ValueError('`subdomain` and `base_url` cannot both be empty.')
     self.base_url = (
       base_url.strip('/')
       if base_url

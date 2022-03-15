@@ -93,9 +93,7 @@ class Unit:
 ## Scalar functions ##
 
 
-## Filter functions ##
-## Use with the `inarea` lookup to filter on whether a field is within a
-## geographical area.
+## Filter functions (use with the `inarea` field lookup) ##
 
 def circle(
   center: Geometry,
@@ -103,6 +101,7 @@ def circle(
   unit: str = Unit.METERS
 ) -> str:
   """
+  Limit results to a geographical area defined by a circle.
   :param center: Center of the circle 
   :param radius: Radius of the circle
   :param unit: Radius units
@@ -111,7 +110,8 @@ def circle(
 
 def geometry(area: Geometry, mode: str = Set.WITHIN) -> str:
   """
-  For comparison with fields of type geo_shape
+  Limit results to a geographical area, based on a given set mode (for use with
+  a geo_shape field).
   :param area: Geographical area
   :param mode: Set mode that defines how the geo_shape field is compared with
     the geographical area
@@ -120,7 +120,7 @@ def geometry(area: Geometry, mode: str = Set.WITHIN) -> str:
 
 def polygon(area: Geometry) -> str:
   """
-  For comparison with fields of type geo_point
+  Limit results to a geographical area (for use with a geo_point field).
   :param area: Geographical area
   """
   return f'polygon({{}}, {area})'

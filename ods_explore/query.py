@@ -11,8 +11,8 @@ ODSQL = NewType('ODSQL', str)
 
 
 class Lookup:
-  ## Lookups ##
-  CONTAINS = '__contains'  # A field-level and row-level lookup
+  """Field lookups"""
+  CONTAINS = '__contains' 
   EXACT = '__exact'
   GT = '__gt'
   GTE = '__gte'
@@ -23,9 +23,6 @@ class Lookup:
   INRANGE = '__inrange'
   ISNULL = '__isnull'
 
-  # Optional prefix for escaping field names that are Python keywords
-  ESC = '__esc__'
-
   @classmethod
   def parse(cls, key: str) -> Tuple[Optional[str], Optional[str]]:
     """
@@ -33,29 +30,20 @@ class Lookup:
     :param key: Key to parse
     :returns: (trimmed key, lookup)
     """
-    if key == cls.CONTAINS:
-      return None, cls.CONTAINS  # Row-level CONTAINS
-
-    if key.startswith(cls.ESC):
-      key = cls.trim(key, cls.ESC, from_start=True)
-
-    lookups = [getattr(cls, attr) for attr in dir(cls) if attr.isupper()]
-    lookups.remove(cls.ESC)
+    lookups = [getattr(cls, attr) for attr in dir(cls) if attr.isupper()]  
     for lookup in lookups:
       if key.endswith(lookup):
         return cls.trim(key, lookup), lookup
-
     return key, None
 
   @staticmethod
-  def trim(key: str, lookup: str, from_start: bool = False) -> str:
+  def trim(key: str, lookup: str) -> str:
     """
     Trim a lookup from a key.
     :param key: Key to trim
     :param lookup: Lookup to remove
-    :param from_start: Trim from the start of the key
     """
-    trimmed = key[len(lookup):] if from_start else key[:-len(lookup)]
+    trimmed = key[:-len(lookup)]
     if not trimmed:
       raise ValueError(f"Invalid lookup parameter '{key}'")
     return trimmed
@@ -93,7 +81,7 @@ class Q:
     # Include parentheses because inversion may apply to > 1 expression
     if not (odsql.startswith('(') and odsql.endswith(')')):
       odsql = f'({odsql})'
-    q.raw = f'not {self.odsql}'
+    q.raw = f'not {odsql}'
     return q
 
   @property
@@ -118,9 +106,7 @@ class Q:
 
       # Handle lookups
       expression = None
-      if lookup == Lookup.CONTAINS and field_name is None:
-        expression = lang.str(value)  # Row-level CONTAINS
-      elif lookup == Lookup.CONTAINS:
+      if lookup == Lookup.CONTAINS:
         op, query = 'like', lang.str(value)
       elif lookup == Lookup.GT:
         op, query = '>', value
@@ -276,13 +262,9 @@ class CatalogQuery(Query):
       **self.settings
     )
 
-  def datasets(self) -> CatalogQuery:
-    self.base_path += '/datasets'
-    return self
-
 
 class DatasetQuery(Query):
-  """Interface for the Dataset API""" 
+  """Interface for the Dataset API"""
 
   def __init__(self, **kwargs) -> None:
     self.dataset_id = kwargs.pop('dataset_id')
