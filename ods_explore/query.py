@@ -199,24 +199,18 @@ class Query(models.OpendatasoftCore):
   def decoded_url(self) -> str:
     return urllib.parse.unquote_plus(self.url)
 
-  ## Not implemented ##
-
-  def export(self):
-    raise NotImplementedError()
-  
-  def facets(self):
-    raise NotImplementedError()
-
-  def attachments(self):
-    raise NotImplementedError()
-
-  ## ODSQL filters ##
+  ## Fetch results ##
 
   def get(self) -> dict:
     return super().get(self.url)
 
   def count(self) -> int:
     return self.get()['total_count']
+
+  def exists(self) -> bool:
+    return self.count() > 0
+
+  ## ODSQL filters ##
 
   def filter(self, *args: Union[Q, ODSQL], **kwargs: Any) -> Query:
     """
@@ -234,13 +228,16 @@ class Query(models.OpendatasoftCore):
     clone._where.append(' and '.join(filter(None, expressions)))
     return clone
 
+  def exclude(self) -> Query:
+    pass
+
   def values(self, *fields: str, **expressions: Any) -> Query:
     """
     Choose fields to return.
     :param *fields: Field names to which the `select` should be limited
-    :param **expressions: A labeled expression with which to annotate each row.
-      An expression can be a string, number, F expression, or scalar function,
-      and can be transformed with arithmetic operators.
+    :param **expressions: Expressions with which to annotate each row. They can
+      be strings, numbers, F expressions, or scalar functions, and can be
+      transformed with arithmetic operators.
     """
     annotations = (
       f'{value} as {key}'
@@ -270,7 +267,7 @@ class Query(models.OpendatasoftCore):
     clone._refine.extend(f'{key}:{value}' for key, value in kwargs.items())
     return clone
 
-  def exclude(self, **kwargs: Any) -> Query:
+  def ignore(self, **kwargs: Any) -> Query:
     """
     Limit results by excluding the given facet values, ANDed together.
     :param **kwargs: Facet parameters, compatible with `in` field lookup
@@ -283,6 +280,17 @@ class Query(models.OpendatasoftCore):
         value = [value]
       clone._exclude.extend(f'{key}:{item}' for item in value)
     return clone
+
+  ## Not implemented ##
+
+  def export(self):
+    raise NotImplementedError()
+  
+  def facets(self):
+    raise NotImplementedError()
+
+  def attachments(self):
+    raise NotImplementedError()
 
 
 class CatalogQuery(Query):
