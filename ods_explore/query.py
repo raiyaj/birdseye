@@ -52,7 +52,8 @@ class Lookup:
 
 class Q:
   """
-  Complex queries using lookups, and combined with bitwise boolean operators
+  Represent complex queries using field lookups, which can be combined with
+  bitwise boolean operators.
   """
 
   def __init__(self, **kwargs: Any) -> None:
@@ -138,11 +139,11 @@ class Q:
 
 
 class F(str):
-  """"""
+  """Represent the value of a field."""
 
   def __init__(self, field: str) -> None:
     """
-    :param field: 
+    :param field: The field name
     """
     self.field = field
 
@@ -179,11 +180,9 @@ class Query(models.OpendatasoftCore):
   def _clone(self) -> Query:
     return deepcopy(self)
 
-  ## API endpoints ##
-
-  def url(self, decode: bool = False, **kwargs: Any) -> str:
-    # TODO: filter out overwritten default settings
-    url = self.build_url(
+  @property
+  def url(self) -> str:
+    return self.build_url(
       self.base_path,
       self.build_querystring(
         select=self._select,
@@ -192,14 +191,15 @@ class Query(models.OpendatasoftCore):
         order_by=self._order_by,
         refine=self._refine,
         exclude=self._exclude,
-        **self.settings,
-        **kwargs
+        **self.settings
       )
     )
-    return urllib.parse.unquote_plus(url) if decode else url
 
-  def get(self, **kwargs: Any) -> dict:
-    return super().get(self.url(**kwargs))
+  @property
+  def decoded_url(self) -> str:
+    return urllib.parse.unquote_plus(self.url)
+
+  ## Not implemented ##
 
   def export(self):
     raise NotImplementedError()
@@ -211,6 +211,12 @@ class Query(models.OpendatasoftCore):
     raise NotImplementedError()
 
   ## ODSQL filters ##
+
+  def get(self) -> dict:
+    return super().get(self.url)
+
+  def count(self) -> int:
+    return self.get()['total_count']
 
   def filter(self, *args: Union[Q, ODSQL], **kwargs: Any) -> Query:
     """
@@ -230,8 +236,11 @@ class Query(models.OpendatasoftCore):
 
   def values(self, *fields: str, **expressions: Any) -> Query:
     """
-    :param fields: 
-    :param expressions:
+    Choose fields to return.
+    :param *fields: Field names to which the `select` should be limited
+    :param **expressions: A labeled expression with which to annotate each row.
+      An expression can be a string, number, F expression, or scalar function,
+      and can be transformed with arithmetic operators.
     """
     annotations = (
       f'{value} as {key}'
@@ -240,6 +249,9 @@ class Query(models.OpendatasoftCore):
     clone = self._clone()
     clone._select.append(','.join([*fields, *annotations]))
     return clone
+
+  def aggregate(self) -> dict:
+    pass
 
   def group_by(self):
     pass
@@ -281,6 +293,7 @@ class CatalogQuery(Query):
 
     self.base_path = ''
     self.datasets = self._clone()
+    self.datasets.many = True
     self.datasets.base_path = 'datasets'
 
   def dataset(self, dataset_id: str) -> DatasetQuery:
@@ -301,6 +314,7 @@ class DatasetQuery(Query):
 
     self.base_path = f'datasets/{self.dataset_id}'
     self.records = self._clone()
+    self.records.many = True
     self.records.base_path += '/records'
 
   def record(self, record_id: str) -> RecordQuery:
