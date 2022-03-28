@@ -44,6 +44,7 @@ KEYWORDS = [
 ## Literals ##
 
 Date = NewType('Date', str)
+Field = NewType('Field', str)
 Geometry = NewType('Geometry', str)
 String = NewType('String', str)
 
@@ -53,6 +54,13 @@ def date(date: str) -> Date:
   :param date: An ISO 8601 or YYYY/MM/DD formatted date
   """
   return f"date'{date}'"
+
+def field(field: str) -> Field:
+  return (
+    f'`{field}`'
+    if field in KEYWORDS or field.isdigit()
+    else field
+  )
 
 def geom(geometry: Union[str, dict]) -> Geometry:
   """

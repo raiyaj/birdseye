@@ -12,6 +12,7 @@ ODSQL = NewType('ODSQL', str)
 
 class Lookup:
   """Field lookups"""
+
   CONTAINS = '__contains' 
   EXACT = '__exact'
   GT = '__gt'
@@ -98,11 +99,7 @@ class Q:
     expressions = []
     for key, value in self.kwargs.items():
       field_name, lookup = Lookup.parse(key)
-
-      # Escape field names
-      if field_name:
-        if field_name in lang.KEYWORDS or field_name.isdigit():
-          field_name = f'`{field_name}`'
+      field = lang.field(field_name)
 
       # Handle lookups
       expression = None
@@ -123,10 +120,10 @@ class Q:
           else query
           for query in value
         )
-        expression = ' or '.join(f'{field_name} = {query}' for query in queries)
+        expression = ' or '.join(f'{field} = {query}' for query in queries)
         expression = f'({expression})'
       elif lookup == Lookup.INAREA:
-        expression = value.format(field_name)
+        expression = value.format(field)
       elif lookup == Lookup.INRANGE:
         op, query = 'in', value
       elif lookup == Lookup.ISNULL:
@@ -136,8 +133,30 @@ class Q:
       else:
         op, query = '=', lang.str(value) if isinstance(value, str) else value
 
-      expressions.append(expression or f'{field_name} {op} {query}')
+      expressions.append(expression or f'{field} {op} {query}')
     return " and ".join(expressions)
+
+
+class F(str):
+  """"""
+
+  def __init__(self, field: str) -> None:
+    """
+    :param field: 
+    """
+    self.field = field
+
+  def __add__(self, other: float) -> str:
+    return f'{self.field} + {other}'
+
+  def __sub__(self, other: float) -> str:
+    return f'{self.field} - {other}'
+
+  def __mul__(self, other: float) -> str:
+    return f'{self.field} * {other}'
+
+  def __truediv__(self, other: float) -> str:
+    return f'{self.field} / {other}'
 
 
 class Query(models.OpendatasoftCore):
@@ -193,14 +212,11 @@ class Query(models.OpendatasoftCore):
 
   ## ODSQL filters ##
 
-  def select(self):
-    pass
-
   def filter(self, *args: Union[Q, ODSQL], **kwargs: Any) -> Query:
     """
     Filter results.
     :param *args: Q expressions or raw ODSQL queries
-    :param **kwargs: Lookup parameters
+    :param **kwargs: Field lookups
     """
     expressions = (
       expression.odsql
@@ -210,6 +226,19 @@ class Query(models.OpendatasoftCore):
     )
     clone = self._clone()
     clone._where.append(' and '.join(filter(None, expressions)))
+    return clone
+
+  def values(self, *fields: str, **expressions: Any) -> Query:
+    """
+    :param fields: 
+    :param expressions:
+    """
+    annotations = (
+      f'{value} as {key}'
+      for key, value in expressions.items()
+    )
+    clone = self._clone()
+    clone._select.append(','.join([*fields, *annotations]))
     return clone
 
   def group_by(self):
@@ -232,7 +261,7 @@ class Query(models.OpendatasoftCore):
   def exclude(self, **kwargs: Any) -> Query:
     """
     Limit results by excluding the given facet values, ANDed together.
-    :param **kwargs: Facet parameters, compatible with `in` lookups
+    :param **kwargs: Facet parameters, compatible with `in` field lookup
     """
     clone = self._clone()
     for key, value in kwargs.items():
