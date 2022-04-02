@@ -214,8 +214,8 @@ class Query(models.OpendatasoftCore):
     if not args and not kwargs:
       return {}
 
-    q = self.select(*args, **kwargs)
-    results = q.get()
+    query = self.select(*args, **kwargs)
+    results = query.get()
 
     if results['total_count'] == 0:
       return {}
@@ -227,7 +227,7 @@ class Query(models.OpendatasoftCore):
 
   def filter(self, *args: Union[Q, ODSQL], **kwargs: Any) -> Query:
     """
-    Filter results.
+    Return results that match the given filters.
     :param *args: Q expressions or raw ODSQL queries
     :param **kwargs: Field lookups
     """
@@ -241,8 +241,17 @@ class Query(models.OpendatasoftCore):
     clone._where.append(' and '.join(filter(None, expressions)))
     return clone
 
-  def exclude(self) -> Query:
-    pass
+  def exclude(self, *args: Union[Q, ODSQL], **kwargs: Any) -> Query:
+    """
+    Return results that do not match the given filters.
+    :param *args: Q expressions or raw ODSQL queries
+    :param **kwargs: Field lookups
+    """
+    query = self.filter(*args, **kwargs)
+    filter_expression = query._where.pop()
+    if filter_expression:
+      query._where.append(f'not ({filter_expression})')
+    return query
 
   def select(self, *fields: str, **expressions: Any) -> Query:
     """
@@ -268,7 +277,7 @@ class Query(models.OpendatasoftCore):
 
   def refine(self, **kwargs: Any) -> Query:
     """
-    Limit results by refining on the given facet values, ANDed together.
+    Return results that match the given facet values.
     :param **kwargs: Facet parameters
     """
     clone = self._clone()
@@ -277,7 +286,7 @@ class Query(models.OpendatasoftCore):
 
   def ignore(self, **kwargs: Any) -> Query:
     """
-    Limit results by excluding the given facet values, ANDed together.
+    Return results that do not match the given facet values.
     :param **kwargs: Facet parameters, compatible with `in` field lookup
     """
     clone = self._clone()
