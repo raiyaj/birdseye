@@ -55,7 +55,7 @@ def date(date: str) -> Date:
   """
   return f"date'{date}'"
 
-def field(field: str) -> Field:
+def fld(field: str) -> Field:
   return (
     f'`{field}`'
     if field in KEYWORDS or field.isdigit()
@@ -132,6 +132,72 @@ def polygon(area: Geometry) -> str:
   :param area: Geographical area
   """
   return f'polygon({{}}, {area})'
+
+
+## Aggregation functions ##
+
+def avg(field: str) -> str:
+  """
+  The average of a field
+  :param field: A numeric field
+  """
+  return f'avg({fld(field)})'
+
+def count(field: str = None) -> str:
+  """
+  The count of non-null values of a field, or the count of all elements if no
+  field is provided
+  :param field: A field
+  """
+  return f'count({fld(field) or "*"})'
+
+def distinct() -> str:
+  pass
+
+def envelope(field: str) -> str:
+  """
+  The convex hull (eg. envelope) of a field
+  :param field: A geo_point field
+  """
+  return f'envelope({fld(field)})'
+
+def max(field: str) -> str:
+  """
+  The maximum value of a field
+  :param field: A numeric or date field
+  """
+  return f'max({fld(field)})'
+
+def median(field: str) -> str:
+  """
+  The median (eg. 50th percentile) of a field
+  :param field: A numeric field
+  """
+  return f'median({fld(field)})'
+
+def min(field: str) -> str:
+  """
+  The minimum value of a field
+  :param field: A numeric or date field
+  """
+  return f'min({fld(field)})'
+
+def percentile(field: str, percentile: float) -> str:
+  """
+  The nth percentile of a field
+  :param field: A numeric field
+  :param percentile: A percentile between 0 and 100
+  """
+  if not 0 <= percentile <= 100:
+    raise ValueError('`percentile` must be a number between 0 and 100.')
+  return f'percentile({fld(field)}, {percentile})'
+
+def sum(field: str) -> str:
+  """
+  The sum of all values
+  :param field: A numeric field
+  """
+  return f'sum({fld(field)})'
 
 
 ## Ranges ##

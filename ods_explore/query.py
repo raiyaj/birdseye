@@ -100,7 +100,7 @@ class Q:
     expressions = []
     for key, value in self.kwargs.items():
       field_name, lookup = Lookup.parse(key)
-      field = lang.field(field_name)
+      field = lang.fld(field_name)
 
       # Handle lookups
       expression = None
@@ -210,7 +210,20 @@ class Query(models.OpendatasoftCore):
   def exists(self) -> bool:
     return self.count() > 0
 
-  ## ODSQL filters ##
+  def aggregate(self, *args, **kwargs) -> dict:
+    if not args and not kwargs:
+      return {}
+
+    q = self.select(*args, **kwargs)
+    results = q.get()
+
+    if results['total_count'] == 0:
+      return {}
+
+    resource = 'dataset' if isinstance(self, CatalogQuery) else 'record'
+    return results[f'{resource}s'][0][resource]['fields']
+
+  ## Chainable querying methods ##
 
   def filter(self, *args: Union[Q, ODSQL], **kwargs: Any) -> Query:
     """
@@ -231,7 +244,7 @@ class Query(models.OpendatasoftCore):
   def exclude(self) -> Query:
     pass
 
-  def values(self, *fields: str, **expressions: Any) -> Query:
+  def select(self, *fields: str, **expressions: Any) -> Query:
     """
     Choose fields to return.
     :param *fields: Field names to which the `select` should be limited
@@ -247,16 +260,11 @@ class Query(models.OpendatasoftCore):
     clone._select.append(','.join([*fields, *annotations]))
     return clone
 
-  def aggregate(self) -> dict:
-    pass
-
   def group_by(self):
     pass
 
   def order_by(self):
     pass
-
-  ## Facet filters ##
 
   def refine(self, **kwargs: Any) -> Query:
     """
