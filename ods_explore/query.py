@@ -211,6 +211,10 @@ class Query(models.OpendatasoftCore):
     return self.count() > 0
 
   def aggregate(self, *args, **kwargs) -> dict:
+    """
+    Returns a dictionary of aggregate values. Each argument specifies a value
+    that will be included in the output, and can be defined with a label.
+    """
     if not args and not kwargs:
       return {}
 
@@ -220,7 +224,12 @@ class Query(models.OpendatasoftCore):
     if results['total_count'] == 0:
       return {}
 
-    resource = 'dataset' if isinstance(self, CatalogQuery) else 'record'
+    resource = None
+    if isinstance(self, CatalogQuery):
+       resource = 'dataset'
+    elif isinstance(self, DatasetQuery):
+      resource = 'record'
+
     return results[f'{resource}s'][0][resource]['fields']
 
   ## Chainable querying methods ##
@@ -253,27 +262,36 @@ class Query(models.OpendatasoftCore):
       query._where.append(f'not ({filter_expression})')
     return query
 
-  def select(self, *fields: str, **expressions: Any) -> Query:
+  def select(self, *args: Any, **kwargs: Any) -> Query:
     """
-    Choose fields to return.
-    :param *fields: Field names to which the `select` should be limited
-    :param **expressions: Expressions with which to annotate each row. They can
-      be strings, numbers, F expressions, or scalar functions, and can be
-      transformed with arithmetic operators.
+    Choose fields to return. Each argument is an expression to which the
+    `select` should be limited. Expressions can be fields, strings, numbers, F
+    expressions, aggregations, or scalar functions, and can be combined with
+    arithmetic operators and defined with labels.
     """
     annotations = (
       f'{value} as {key}'
-      for key, value in expressions.items()
+      for key, value in kwargs.items()
     )
     clone = self._clone()
-    clone._select.append(','.join([*fields, *annotations]))
+    clone._select.append(','.join([*args, *annotations]))
     return clone
 
-  def group_by(self):
+  def group_by(self, *args: str, **kwargs: Any) -> Query:
     pass
 
-  def order_by(self):
-    pass
+  def order_by(self, *args: str) -> Query:
+    """
+    """
+    expressions = (
+      f'{arg.lstrip("-")} desc'
+      if arg.startswith('-')
+      else f'{arg} asc'
+      for arg in args
+    )
+    clone = self._clone()
+    clone._order_by.append(','.join(expressions))
+    return clone
 
   def refine(self, **kwargs: Any) -> Query:
     """
