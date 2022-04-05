@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import random
 from typing import Any, NewType, Optional, Tuple, Union
 import urllib.parse
 
@@ -173,7 +174,7 @@ class Query(models.OpendatasoftCore):
     self._select = []
     self._where = []
     self._group_by = []
-    self._order_by = []
+    self._order_by = ''
     self._refine = []
     self._exclude = []
 
@@ -283,15 +284,18 @@ class Query(models.OpendatasoftCore):
   def order_by(self, *args: str) -> Query:
     """
     """
+    if '?' in args:
+      self._order_by = f'random({random.randint(0, 1000)})'
+      return self
+
     expressions = (
       f'{arg.lstrip("-")} desc'
       if arg.startswith('-')
       else f'{arg} asc'
       for arg in args
     )
-    clone = self._clone()
-    clone._order_by.append(','.join(expressions))
-    return clone
+    self._order_by = ','.join(expressions)
+    return self
 
   def refine(self, **kwargs: Any) -> Query:
     """
