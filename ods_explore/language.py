@@ -100,6 +100,13 @@ class Unit:
 
 ## Scalar functions ##
 
+def length(field: Union[String, str]) -> str:
+  """
+  The number of characters
+  :param string: A string literal or string field
+  """
+  return f'length({fld(field)})'
+
 
 ## Filter functions (use with the `inarea` field lookup) ##
 
@@ -149,7 +156,7 @@ def count(field: str = None) -> str:
   field is provided
   :param field: A field
   """
-  return f'count({fld(field) or "*"})'
+  return f'count({fld(field or "*")})'
 
 def distinct() -> str:
   pass

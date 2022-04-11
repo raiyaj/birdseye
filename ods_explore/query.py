@@ -63,6 +63,7 @@ class Q:
     """
     self.kwargs = kwargs
     self.raw = ''
+    self._annotations = {}
 
   def __and__(self, other: Q) -> Q:
     """a & b"""
@@ -101,6 +102,7 @@ class Q:
     expressions = []
     for key, value in self.kwargs.items():
       field_name, lookup = Lookup.parse(key)
+      field_name = self._annotations.get(field_name, field_name)
       field = lang.fld(field_name)
 
       # Handle lookups
@@ -137,6 +139,10 @@ class Q:
 
       expressions.append(expression or f'{field} {op} {query}')
     return " and ".join(expressions)
+
+  def annotate(self, annotations: dict) -> Q:
+    self._annotations = annotations
+    return self
 
 
 class F(str):
@@ -177,6 +183,7 @@ class Query(models.OpendatasoftCore):
     self._order_by = ''
     self._refine = []
     self._exclude = []
+    self._annotations = {}
 
   def _clone(self) -> Query:
     return deepcopy(self)
@@ -241,12 +248,14 @@ class Query(models.OpendatasoftCore):
     :param *args: Q expressions or raw ODSQL queries
     :param **kwargs: Field lookups
     """
-    expressions = (
-      expression.odsql
-      if isinstance(expression, Q)
-      else expression
-      for expression in [*args, Q(**kwargs)]
-    )
+    expressions = []
+    for expression in [*args, Q(**kwargs)]:
+      if isinstance(expression, Q):
+        expression.annotate(self._annotations)
+        expressions.append(expression.odsql)
+      else:
+        expressions.append(expression)
+
     clone = self._clone()
     clone._where.append(' and '.join(filter(None, expressions)))
     return clone
@@ -265,7 +274,7 @@ class Query(models.OpendatasoftCore):
 
   def select(self, *args: Any, **kwargs: Any) -> Query:
     """
-    Choose fields to return. Each argument is an expression to which the
+    Select fields to return. Each argument is an expression to which the
     `select` should be limited. Expressions can be fields, strings, numbers, F
     expressions, aggregations, or scalar functions, and can be combined with
     arithmetic operators and defined with labels.
@@ -278,11 +287,24 @@ class Query(models.OpendatasoftCore):
     clone._select.append(','.join([*args, *annotations]))
     return clone
 
+  def annotate(self, **kwargs: str) -> Query:
+    """
+    Annotate this query with the given labels and expressions (a scalar function
+    such as `length()`), so that they may be referenced in subsequent chained
+    methods. Note: this does not annotate items in the returned results; to do
+    so, use `select()`.
+    """
+    self._annotations.update(kwargs)
+    return self
+
   def group_by(self, *args: str, **kwargs: Any) -> Query:
     pass
 
   def order_by(self, *args: str) -> Query:
     """
+    Specify the order of results.
+    :param args: Field names, aggregation functions, or `?` to order results
+      randomly
     """
     if '?' in args:
       self._order_by = f'random({random.randint(0, 1000)})'
