@@ -4,5 +4,5 @@ setup(
   name='ods-explore',
   version='1.0.0',
   packages=['ods_explore'],
-  install_requires=['requests']
+  install_requires=['pandas', 'requests']
 )

@@ -16,6 +16,7 @@ class Opendatasoft:
     base_url: str = None,
     session: requests.Session = None,
     api_key: str = None,
+    chunk_size: int = 10,
     lang: str = 'fr',
     timezone: str = 'UTC'
   ) -> None:
@@ -26,6 +27,7 @@ class Opendatasoft:
     :param base_url: Custom base API URL
     :param session: A session object with which to make API calls
     :param api_key: Opendatasoft API key for accessing private datasets
+    :param chunk_size: 
     :param lang: Default language used to format strings (for example, in
       the `date_format` method)
     :param timezone: Default timezone applied to datetime fields in queries and
@@ -40,13 +42,13 @@ class Opendatasoft:
     if api_key:
       self.login(api_key)
 
-    query_kwargs = {
-      'base_url': self.base_url,
-      'session': self.session,
-      'lang': lang,
-      'timezone': timezone
-    }
-    self.catalog = query.CatalogQuery(**query_kwargs)
+    self.catalog = query.CatalogQuery(
+      base_url=self.base_url,
+      session=self.session,
+      chunk_size=chunk_size,
+      lang=lang,
+      timezone=timezone
+    )
 
   def login(self, api_key: str) -> None:
     """Login to an Opendatasoft domain to access private datasets."""

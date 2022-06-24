@@ -1,7 +1,9 @@
 import logging
 import requests
-from typing import Any, NamedTuple
+from typing import Any, List, NamedTuple
 import urllib.parse
+
+from .language import Date
 
 logger = logging.getLogger(__package__)
 
@@ -30,7 +32,7 @@ class OpendatasoftCore:
     parameters = {
       key: value
       for key, value in kwargs.items()
-      if value is not None
+      if value not in ['', None]
     }
     return f'?{urllib.parse.urlencode(parameters, doseq=True)}'
 
@@ -44,11 +46,21 @@ class OpendatasoftCore:
 
 
 class Dataset(NamedTuple):
-  pass
+  attachments: List
+  data_visible: bool
+  dataset_id: str
+  dataset_uid: str
+  features: List
+  fields: List[dict]
+  has_records: bool
+  visibility: str
 
 
 class Record(NamedTuple):
-  pass
+  id: str
+  fields: dict
+  size: int
+  timestamp: Date
 
 
 class Facet(NamedTuple):

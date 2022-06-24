@@ -171,7 +171,8 @@ class Query(models.OpendatasoftCore):
   """ORM base class"""
 
   def __init__(self, **kwargs) -> None:
-    self.settings = {
+    self.chunk_size = kwargs.pop('chunk_size')
+    self.default_format = {
       'lang': kwargs.pop('lang'),
       'timezone': kwargs.pop('timezone')
     }
@@ -189,7 +190,10 @@ class Query(models.OpendatasoftCore):
     return deepcopy(self)
 
   @property
-  def url(self) -> str:
+  def decoded_url(self) -> str:
+    return urllib.parse.unquote_plus(self.url())
+
+  def url(self, **kwargs: Any) -> str:
     return self.build_url(
       self.base_path,
       self.build_querystring(
@@ -199,24 +203,46 @@ class Query(models.OpendatasoftCore):
         order_by=self._order_by,
         refine=self._refine,
         exclude=self._exclude,
-        **self.settings
+        **self.default_format,
+        **kwargs
       )
     )
 
-  @property
-  def decoded_url(self) -> str:
-    return urllib.parse.unquote_plus(self.url)
-
   ## Fetch results ##
 
-  def get(self) -> dict:
-    return super().get(self.url)
+  def get(self, **kwargs: Any) -> dict:
+    return super().get(self.url(**kwargs))
 
   def count(self) -> int:
     return self.get()['total_count']
 
   def exists(self) -> bool:
     return self.count() > 0
+
+  def all(self):
+    # returns a list of all results (no links)
+    pass
+
+  def iterator(self) -> dict:
+    count = offset = 0
+    key, klass = (
+        ('dataset', models.Dataset)
+        if isinstance(self, CatalogQuery)
+        else ('record', models.Record)
+      )
+    key_plural = f'{key}s'
+
+    while offset <= count:
+      results = self.get(limit=self.chunk_size, offset=offset)
+      count = results['total_count']
+      items = results[key_plural]
+      offset += len(items)
+
+      if len(items) == 0:
+        break
+
+      for item in items:
+        yield klass(**item[key])
 
   def aggregate(self, *args, **kwargs) -> dict:
     """
@@ -369,8 +395,9 @@ class CatalogQuery(Query):
     return DatasetQuery(
       dataset_id=dataset_id,
       base_url=self.base_url,
+      chunk_size=self.chunk_size,
       session=self.session,
-      **self.settings
+      **self.default_format
     )
 
 
@@ -391,8 +418,9 @@ class DatasetQuery(Query):
       record_id=record_id,
       base_path=self.base_path,
       base_url=self.base_url,
+      chunk_size=self.chunk_size,
       session=self.session,
-      **self.settings
+      **self.default_format
     )
 
 
