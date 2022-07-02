@@ -172,22 +172,25 @@ class Query(models.OpendatasoftCore):
 
   def __init__(
     self,
-    format: Dict[str, str],
-    **kwargs
+    api_options: Dict[str, str],
+    lang: str,
+    timezone: str
   ) -> None:
     """
-    :param format: Dictionary of default format options
-      :lang str: Language used to format strings (for example, in the
-        `date_format` method)
-      :timezone str: Timezone applied to datetime fields in queries and
-        responses
+    :param api_options: Dictionary of options with which to init
+      models.OpendatasoftCore
+    :lang str: Default language used to format strings (for example, in the
+      `date_format` method)
+    :timezone str: Default timezone applied to datetime fields in queries and
+      responses
     """
-    self.format = {
-      'lang': format.get('lang', 'fr'),
-      'timezone': format.get('timezone', 'UTC')
-    }
-    super().__init__(**kwargs)
+    super().__init__(**api_options)
 
+    self.api_options = api_options
+    self.format = {
+      'lang': lang,
+      'timezone': timezone
+    }
     self._select = []
     self._where = []
     self._group_by = []
@@ -406,17 +409,15 @@ class CatalogQuery(Query):
   def __init__(self, **kwargs) -> None:
     super().__init__(**kwargs)
     self.datasets = DatasetsQuery(
-      base_url=self.base_url,
-      session=self.session,
-      format=self.format
+      api_options=self.api_options,
+      **self.format
     )
 
   def dataset(self, dataset_id: str) -> DatasetQuery:
     return DatasetQuery(
       dataset_id=dataset_id,
-      base_url=self.base_url,
-      session=self.session,
-      format=self.format
+      api_options=self.api_options,
+      **self.format
     )
 
 
@@ -434,9 +435,8 @@ class DatasetQuery(Query):
     self.dataset_id = dataset_id
     self.records = RecordsQuery(
       dataset_id=dataset_id,
-      base_url=self.base_url,
-      session=self.session,
-      format=self.format
+      api_options=self.api_options,
+      **self.format
     )
 
   @property
@@ -448,9 +448,8 @@ class DatasetQuery(Query):
     return RecordQuery(
       dataset_id=self.dataset_id,
       record_id=record_id,
-      base_url=self.base_url,
-      session=self.session,
-      format=self.format
+      api_options=self.api_options,
+      **self.format
     )
 
 

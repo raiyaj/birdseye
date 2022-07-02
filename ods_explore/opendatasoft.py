@@ -16,7 +16,8 @@ class Opendatasoft:
     base_url: str = None,
     session: requests.Session = None,
     api_key: str = None,
-    format: dict = {}
+    lang: str = 'fr',
+    timezone: str = 'UTC'
   ) -> None:
     """
     :param subdomain: Subdomain used to create the base API URL,
@@ -25,8 +26,10 @@ class Opendatasoft:
     :param base_url: Custom base API URL
     :param session: A session object with which to make API calls
     :param api_key: Opendatasoft API key for accessing private datasets
-    :param format: Dictionary of formatting options with which to init
-      query.Query. Available options: lang, timezone
+    :param lang: Default language used to format strings (for example, in
+      the `date_format` method)
+    :param timezone: Default timezone applied to datetime fields in queries and
+      responses
     """
     self.base_url = (
       base_url.strip('/')
@@ -38,9 +41,12 @@ class Opendatasoft:
       self.login(api_key)
 
     self.catalog = query.CatalogQuery(
-      base_url=self.base_url,
-      session=self.session,
-      format=format
+      api_options={
+        'base_url': self.base_url,
+        'session': self.session
+      },
+      lang=lang,
+      timezone=timezone
     )
 
   def login(self, api_key: str) -> None:
