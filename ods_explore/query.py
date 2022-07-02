@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import random
-from typing import Any, NewType, Optional, Tuple, Union
+from typing import Any, Dict, List, NewType, Optional, Tuple, Union
 import urllib.parse
 
 from . import language as lang
@@ -170,11 +170,21 @@ class F(str):
 class Query(models.OpendatasoftCore):
   """ORM base class"""
 
-  def __init__(self, **kwargs) -> None:
-    self.chunk_size = kwargs.pop('chunk_size')
-    self.default_format = {
-      'lang': kwargs.pop('lang'),
-      'timezone': kwargs.pop('timezone')
+  def __init__(
+    self,
+    format: Dict[str, str],
+    **kwargs
+  ) -> None:
+    """
+    :param format: Dictionary of default format options
+      :lang str: Language used to format strings (for example, in the
+        `date_format` method)
+      :timezone str: Timezone applied to datetime fields in queries and
+        responses
+    """
+    self.format = {
+      'lang': format.get('lang', 'fr'),
+      'timezone': format.get('timezone', 'UTC')
     }
     super().__init__(**kwargs)
 
@@ -203,7 +213,7 @@ class Query(models.OpendatasoftCore):
         order_by=self._order_by,
         refine=self._refine,
         exclude=self._exclude,
-        **self.default_format,
+        **self.format,
         **kwargs
       )
     )
@@ -219,11 +229,18 @@ class Query(models.OpendatasoftCore):
   def exists(self) -> bool:
     return self.count() > 0
 
-  def all(self):
-    # returns a list of all results (no links)
-    pass
+  def all(self, chunk_size: int = 100) -> List:
+    """
+    Returns all results as a list
+    :param chunk_size: Number of results to fetch in each Opendatasoft API call
+    """
+    return list(self.iterator(chunk_size=chunk_size))
 
-  def iterator(self) -> dict:
+  def iterator(self, chunk_size: int = 100) -> dict:
+    """
+    Returns results as an iterator
+    :param chunk_size: Number of results to fetch in each Opendatasoft API call
+    """
     count = offset = 0
     key, klass = (
         ('dataset', models.Dataset)
@@ -233,7 +250,7 @@ class Query(models.OpendatasoftCore):
     key_plural = f'{key}s'
 
     while offset <= count:
-      results = self.get(limit=self.chunk_size, offset=offset)
+      results = self.get(limit=chunk_size, offset=offset)
       count = results['total_count']
       items = results[key_plural]
       offset += len(items)
@@ -260,7 +277,7 @@ class Query(models.OpendatasoftCore):
 
     resource = None
     if isinstance(self, CatalogQuery):
-       resource = 'dataset'
+      resource = 'dataset'
     elif isinstance(self, DatasetQuery):
       resource = 'record'
 
@@ -381,51 +398,82 @@ class Query(models.OpendatasoftCore):
 
 
 class CatalogQuery(Query):
-  """Interface for the Catalog API"""
+  """
+  Interface for the Catalog API. Queries are made via self.datasets or
+  self.dataset().
+  """
 
   def __init__(self, **kwargs) -> None:
     super().__init__(**kwargs)
-
-    self.base_path = ''
-    self.datasets = self._clone()
-    self.datasets.many = True
-    self.datasets.base_path = 'datasets'
+    self.datasets = DatasetsQuery(
+      base_url=self.base_url,
+      session=self.session,
+      format=self.format
+    )
 
   def dataset(self, dataset_id: str) -> DatasetQuery:
     return DatasetQuery(
       dataset_id=dataset_id,
       base_url=self.base_url,
-      chunk_size=self.chunk_size,
       session=self.session,
-      **self.default_format
+      format=self.format
     )
+
+
+class DatasetsQuery(Query):
+  many = True
+  base_path = 'datasets'
 
 
 class DatasetQuery(Query):
   """Interface for the Dataset API"""
+  many = False
 
-  def __init__(self, **kwargs) -> None:
-    self.dataset_id = kwargs.pop('dataset_id')
+  def __init__(self, dataset_id: str, **kwargs) -> None:
     super().__init__(**kwargs)
+    self.dataset_id = dataset_id
+    self.records = RecordsQuery(
+      dataset_id=dataset_id,
+      base_url=self.base_url,
+      session=self.session,
+      format=self.format
+    )
 
-    self.base_path = f'datasets/{self.dataset_id}'
-    self.records = self._clone()
-    self.records.many = True
-    self.records.base_path += '/records'
+  @property
+  def base_path(self):
+    return f'datasets/{self.dataset_id}'
+    
 
   def record(self, record_id: str) -> RecordQuery:
     return RecordQuery(
+      dataset_id=self.dataset_id,
       record_id=record_id,
-      base_path=self.base_path,
       base_url=self.base_url,
-      chunk_size=self.chunk_size,
       session=self.session,
-      **self.default_format
+      format=self.format
     )
 
 
-class RecordQuery(Query):
-  def __init__(self, **kwargs) -> None:
-    self.record_id = kwargs.pop('record_id')
-    self.base_path = kwargs.pop('base_path') + f'/records/{self.record_id}'
+class RecordsQuery(Query):
+  many = True
+
+  def __init__(self, dataset_id: str, **kwargs) -> None:
     super().__init__(**kwargs)
+    self.dataset_id = dataset_id
+  
+  @property
+  def base_path(self):
+    return f'datasets/{self.dataset_id}/records'
+
+
+class RecordQuery(Query):
+  many = False
+
+  def __init__(self, dataset_id: str, record_id: str, **kwargs) -> None:
+    super().__init__(**kwargs)
+    self.dataset_id = dataset_id
+    self.record_id = record_id
+
+  @property
+  def base_path(self):
+    return f'datasets/{self.dataset_id}/records/{self.record_id}'

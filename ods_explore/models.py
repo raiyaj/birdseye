@@ -55,12 +55,18 @@ class Dataset(NamedTuple):
   has_records: bool
   visibility: str
 
+  def __str__(self) -> str:
+    return f'<Dataset: {self.dataset_id}>'
+
 
 class Record(NamedTuple):
   id: str
   fields: dict
   size: int
   timestamp: Date
+
+  def __str__(self) -> str:
+    return f'<Record: {self.id}>'
 
 
 class Facet(NamedTuple):
