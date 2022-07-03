@@ -53,6 +53,7 @@ class Dataset(NamedTuple):
   features: List
   fields: List[dict]
   has_records: bool
+  metas: dict
   visibility: str
 
   def __str__(self) -> str:

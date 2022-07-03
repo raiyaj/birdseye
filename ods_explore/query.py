@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import pandas as pd
 import random
-from typing import Any, Dict, List, NewType, Optional, Tuple, Union
+from typing import Any, Dict, List, NamedTuple, NewType, Optional, Tuple, Union
 import urllib.parse
 
 from . import language as lang
@@ -223,50 +224,95 @@ class Query(models.OpendatasoftCore):
 
   ## Fetch results ##
 
-  def get(self, **kwargs: Any) -> dict:
+  def _get(self, **kwargs: Any) -> dict:
+    """Get raw results."""
     return super().get(self.url(**kwargs))
 
+  def get(
+    self,
+    as_json: bool = False,
+    **kwargs: Any
+  ) -> Union[dict, List[dict], NamedTuple, List[NamedTuple]]:
+    """
+    Get raw results from a single API call.
+    :param as_json: If True, results are json-formatted 
+    :param **kwargs: Kwargs to append to the API call's querystring
+    """
+    json = self._get(**kwargs)
+
+    if self.many:
+      return [
+        item[self.json_key]
+        if as_json
+        else self.model(**item[self.json_key])
+        for item in json[self.json_key_plural]
+      ]
+
+    item = json[self.json_key]
+    return item if as_json else self.model(**item)
+
   def count(self) -> int:
-    return self.get()['total_count']
+    return self._get()['total_count']
 
   def exists(self) -> bool:
     return self.count() > 0
 
-  def all(self, chunk_size: int = 100) -> List:
+  def iterator(
+    self,
+    batch_size: int = 100,
+    as_json: bool = False
+  ) -> Union[dict, NamedTuple]:
     """
-    Returns all results as a list
-    :param chunk_size: Number of results to fetch in each Opendatasoft API call
-    """
-    return list(self.iterator(chunk_size=chunk_size))
-
-  def iterator(self, chunk_size: int = 100) -> dict:
-    """
-    Returns results as an iterator
-    :param chunk_size: Number of results to fetch in each Opendatasoft API call
+    Get an iterator of results.
+    :param batch_size: Number of results to fetch per API call
+    :param as_json: If True, results are json-formatted
     """
     count = offset = 0
-    key, klass = (
-        ('dataset', models.Dataset)
-        if isinstance(self, CatalogQuery)
-        else ('record', models.Record)
-      )
-    key_plural = f'{key}s'
-
     while offset <= count:
-      results = self.get(limit=chunk_size, offset=offset)
+      results = self._get(limit=batch_size, offset=offset)
       count = results['total_count']
-      items = results[key_plural]
+      items = results[self.json_key_plural]
       offset += len(items)
 
-      if len(items) == 0:
+      for item in items:
+        json = item[self.json_key]
+        yield json if as_json else self.model(**json)
+
+      if offset == count:
         break
 
-      for item in items:
-        yield klass(**item[key])
+  def all(self, batch_size: int = 100) -> List[NamedTuple]:
+    """
+    Get all results.
+    :param batch_size: Number of results to fetch per API call
+    """
+    return list(self.iterator(batch_size=batch_size))
+
+  def dataframe(
+    self,
+    batch_size: int = 100,
+    **pandas_kwargs: Any
+  ) -> pd.DataFrame:
+    """
+    Get results as a Pandas DataFrame.
+    :param batch_size: Number of results to fetch per API call
+    :param **pandas_kwargs: Kwargs to pass to pandas.json_normalize()
+    """
+    if not self.many:
+      return pd.json_normalize(self.get(as_json=True))
+
+    it = self.iterator(batch_size=batch_size, as_json=True)
+    return pd.json_normalize(it, **pandas_kwargs)
+
+  def first(self) -> NamedTuple:
+    pass
+
+  def last(self) -> NamedTuple:
+    pass
 
   def aggregate(self, *args, **kwargs) -> dict:
     """
-    Returns a dictionary of aggregate values. Each argument specifies a value
+    Get a dictionary of aggregate values. Each argument specifies a value
     that will be included in the output, and can be defined with a label.
     """
     if not args and not kwargs:
@@ -422,13 +468,18 @@ class CatalogQuery(Query):
 
 
 class DatasetsQuery(Query):
-  many = True
   base_path = 'datasets'
+  many = True
+  model = models.Dataset
+  json_key = model.__name__.lower()
+  json_key_plural = f'{json_key}s'
 
 
 class DatasetQuery(Query):
   """Interface for the Dataset API"""
   many = False
+  model = models.Dataset
+  json_key = model.__name__.lower()
 
   def __init__(self, dataset_id: str, **kwargs) -> None:
     super().__init__(**kwargs)
@@ -455,6 +506,9 @@ class DatasetQuery(Query):
 
 class RecordsQuery(Query):
   many = True
+  model = models.Record
+  json_key = model.__name__.lower()
+  json_key_plural = f'{json_key}s'
 
   def __init__(self, dataset_id: str, **kwargs) -> None:
     super().__init__(**kwargs)
@@ -467,6 +521,8 @@ class RecordsQuery(Query):
 
 class RecordQuery(Query):
   many = False
+  model = models.Record
+  json_key = model.__name__.lower()
 
   def __init__(self, dataset_id: str, record_id: str, **kwargs) -> None:
     super().__init__(**kwargs)
