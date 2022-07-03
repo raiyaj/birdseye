@@ -328,18 +328,12 @@ class Query(models.OpendatasoftCore):
       return {}
 
     query = self.select(*args, **kwargs)
-    results = query.get()
+    results = query._get()
 
     if results['total_count'] == 0:
       return {}
 
-    resource = None
-    if isinstance(self, CatalogQuery):
-      resource = 'dataset'
-    elif isinstance(self, DatasetQuery):
-      resource = 'record'
-
-    return results[f'{resource}s'][0][resource]['fields']
+    return results[self.json_key_plural][0][self.json_key]['fields']
 
   ## Chainable querying methods ##
 
