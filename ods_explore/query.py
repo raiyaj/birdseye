@@ -225,18 +225,21 @@ class Query(models.OpendatasoftCore):
   ## Fetch results ##
 
   def _get(self, **kwargs: Any) -> dict:
-    """Get raw results."""
+    """
+    Get raw results.
+    :param **kwargs: Custom querystring parameters
+    """
     return super().get(self.url(**kwargs))
 
   def get(
     self,
     as_json: bool = False,
     **kwargs: Any
-  ) -> Union[dict, List[dict], NamedTuple, List[NamedTuple]]:
+  ) -> Union[NamedTuple, List[NamedTuple]]:
     """
-    Get raw results from a single API call.
-    :param as_json: If True, results are json-formatted 
-    :param **kwargs: Kwargs to append to the API call's querystring
+    Get results, from a single API call. a dataset or record.
+    :param as_json: If True, result is a dictionary
+    :param **kwargs: Custom querystring parameters, such as `limit` or `offset`
     """
     json = self._get(**kwargs)
 
@@ -252,7 +255,7 @@ class Query(models.OpendatasoftCore):
     return item if as_json else self.model(**item)
 
   def count(self) -> int:
-    return self._get()['total_count']
+    return self._get(limit=0)['total_count']
 
   def exists(self) -> bool:
     return self.count() > 0
@@ -299,16 +302,22 @@ class Query(models.OpendatasoftCore):
     :param **pandas_kwargs: Kwargs to pass to pandas.json_normalize()
     """
     if not self.many:
-      return pd.json_normalize(self.get(as_json=True))
+      return pd.json_normalize(self.read(as_json=True))
 
     it = self.iterator(batch_size=batch_size, as_json=True)
     return pd.json_normalize(it, **pandas_kwargs)
 
-  def first(self) -> NamedTuple:
-    pass
+  def first(self) -> Union[NamedTuple, None]:
+    items = self.get(limit=1)
+    if len(items) == 0:
+      return None
+    return items[0]
 
   def last(self) -> NamedTuple:
-    pass
+    count = self.count()
+    if count == 0:
+      return None
+    return self.get(limit=1, offset=count - 1)[0]
 
   def aggregate(self, *args, **kwargs) -> dict:
     """
