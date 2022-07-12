@@ -76,7 +76,7 @@ def str(string: str) -> String:
   :param string: A string
   """
   # If string is a date or geometry literal, return it unchanged
-  if re.match(r"^date'.*'$", string) or re.match(r"^geom'.*'$", string):
+  if re.match(r"^date'.+'$", string) or re.match(r"^geom'.+'$", string):
     return string
   return f'"{string}"'
 
@@ -100,12 +100,36 @@ class Unit:
 
 ## Scalar functions ##
 
-def length(field: Union[String, str]) -> str:
+def length(field: str) -> str:
   """
   The number of characters
   :param string: A string literal or string field
   """
   return f'length({fld(field)})'
+
+def now() -> str:
+  raise NotImplementedError()
+
+def year() -> str:
+  raise NotImplementedError()
+
+def month() -> str:
+  raise NotImplementedError()
+
+def day() -> str:
+  raise NotImplementedError()
+
+def hour() -> str:
+  raise NotImplementedError()
+
+def minute() -> str:
+  raise NotImplementedError()
+
+def second() -> str:
+  raise NotImplementedError() 
+
+def date_format() -> str:
+  raise NotImplementedError()
 
 
 ## Filter functions (use with the `inarea` field lookup) ##
@@ -159,7 +183,7 @@ def count(field: str = None) -> str:
   return f'count({fld(field or "*")})'
 
 def distinct() -> str:
-  pass
+  raise NotImplementedError()
 
 def envelope(field: str) -> str:
   """
@@ -210,7 +234,7 @@ def sum(field: str) -> str:
 ## Ranges ##
 
 def drange():
-  pass
+  raise NotImplementedError()
 
 def srange():
-  pass
+  raise NotImplementedError()

@@ -3,6 +3,7 @@ import requests
 from typing import Any, List, NamedTuple
 import urllib.parse
 
+from . import exceptions
 from .language import Date
 
 logger = logging.getLogger(__package__)
@@ -40,8 +41,20 @@ class OpendatasoftCore:
     return '/'.join([self.api_url, *args])
 
   def get(self, url: str) -> requests.Response:
-    response = self.session.get(url)
+    try:
+      response = self.session.get(url)
+    except (
+      requests.exceptions.ConnectionError,
+      requests.exceptions.Timeout
+    ) as ex:
+      raise exceptions.ConnectionError(ex)
+    except requests.exceptions.RequestException as ex:
+      raise exceptions.TransportError(ex)
+
     logger.info(f'GET {urllib.parse.unquote_plus(url)} {response.status_code}')
+    if response.status_code != 200:
+      raise exceptions.error_for(response)
+
     return response.json()
 
 

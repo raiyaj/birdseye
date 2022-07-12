@@ -393,7 +393,7 @@ class Query(models.OpendatasoftCore):
     return self
 
   def group_by(self, *args: str, **kwargs: Any) -> Query:
-    pass
+    raise NotImplementedError()
 
   def order_by(self, *args: str) -> Query:
     """
