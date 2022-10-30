@@ -100,12 +100,8 @@ class Unit:
 
 ## Scalar functions ##
 
-def length(field: str) -> str:
-  """
-  The number of characters
-  :param string: A string literal or string field
-  """
-  return f'length({fld(field)})'
+def length() -> str:
+  return NotImplementedError()
 
 def now() -> str:
   raise NotImplementedError()
