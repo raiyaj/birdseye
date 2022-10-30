@@ -6,7 +6,7 @@ import requests
 from . import auth
 from . import query
 
-logger = logging.getLogger(__package__)
+logger = logging.getLogger(__name__)
 
 
 class Opendatasoft:
@@ -16,7 +16,7 @@ class Opendatasoft:
     base_url: str = None,
     session: requests.Session = None,
     api_key: str = None,
-    lang: str = 'fr',
+    lang: str = 'en',
     timezone: str = 'UTC'
   ) -> None:
     """
@@ -26,9 +26,9 @@ class Opendatasoft:
     :param base_url: Custom base API URL
     :param session: A session object with which to make API calls
     :param api_key: Opendatasoft API key for accessing private datasets
-    :param lang: Default language used to format strings (for example, in
-      the `date_format` method)
-    :param timezone: Default timezone applied to datetime fields in queries and
+    :param lang: Language used to format strings (for example, in the
+      `date_format` method)
+    :param timezone: Timezone applied to datetime fields in queries and
       responses
     """
     self.base_url = (

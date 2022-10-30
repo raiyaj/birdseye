@@ -6,7 +6,7 @@ import urllib.parse
 from . import exceptions
 from .language import Date
 
-logger = logging.getLogger(__package__)
+logger = logging.getLogger(__name__)
 
 
 class OpendatasoftCore:
