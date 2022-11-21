@@ -97,28 +97,26 @@ The session object.
 #### get
 
 #### count
-__`count()`__ 
+`count()`  \
 Returns the number of catalog items matching the Query. 
 ```py
-# Returns the number of datasets in the catalog
+# the number of datasets in the catalog
 ods.catalog.datasets.count()
 
-# Returns the number of records in the dataset 'doc-geonames-cities-5000'
+# the number of records in the dataset 'doc-geonames-cities-5000'
 ods.catalog.dataset('doc-geonames-cities-5000').records.count()
 
-# Returns the number of records whose country code is 'CA'
+# the number of records whose country code is 'CA'
 ods.catalog.dataset('doc-geonames-cities-5000').records.filter(country_code='CA').count()
 ```
-`count()` calls `get(limit=0)` behind the scenes, so you should use `count()` instead of loading all items into Python objects - unless you need them in memory anyway, in which case calling `len()` is faster as it avoids an extra API call.
 
 ### exists
-__`exists()`__ \
+`exists()` \
 Returns `True` if the Query contains any results, and `False` if not.
 ```py
 if some_query.exists():
   print('some_query has at least 1 item!')
 ```
-`exists()` calls `get(limit=0)` behind the scenes, so it's useful for checking for the existence of items, but may do more overall work if the Query will be evaluated at some point.
 
 #### iterator
 
