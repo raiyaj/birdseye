@@ -132,7 +132,7 @@ class Q:
       elif lookup == Lookup.INRANGE:
         op, query = 'in', value
       elif lookup == Lookup.ISNULL:
-        op, query = 'is', f'{"" if value else "not "}null'
+        op, query = 'is', f'{"" if value is True else "not "}null'
       elif isinstance(value, bool):
         op, query = 'is', str(value).lower()
       else:
@@ -294,18 +294,18 @@ class Query(models.OpendatasoftCore):
   def dataframe(
     self,
     batch_size: int = 100,
-    **pandas_kwargs: Any
+    **kwargs: Any
   ) -> pd.DataFrame:
     """
     Get results as a Pandas DataFrame.
     :param batch_size: Number of results to fetch per API call
-    :param **pandas_kwargs: Kwargs to pass to pandas.json_normalize()
+    :param **kwargs: Kwargs to pass to pandas.json_normalize()
     """
     if not self.many:
-      return pd.json_normalize(self.read(as_json=True))
+      return pd.json_normalize(self.get(as_json=True))
 
     it = self.iterator(batch_size=batch_size, as_json=True)
-    return pd.json_normalize(it, **pandas_kwargs)
+    return pd.json_normalize(it, **kwargs)
 
   def first(self) -> Union[NamedTuple, None]:
     items = self.get(limit=1)
@@ -398,12 +398,14 @@ class Query(models.OpendatasoftCore):
   def order_by(self, *args: str) -> Query:
     """
     Specify the order of results.
-    :param args: Field names, aggregation functions, or `?` to order results
-      randomly
+    :param args: Field names, or `?` to order results randomly. Prepend field
+      names with `-` indicate descending order.
     """
+    clone = self._clone()
+
     if '?' in args:
-      self._order_by = f'random({random.randint(0, 1000)})'
-      return self
+      clone._order_by = f'random({random.randint(0, 1000)})'
+      return clone
 
     expressions = (
       f'{arg.lstrip("-")} desc'
@@ -411,8 +413,8 @@ class Query(models.OpendatasoftCore):
       else f'{arg} asc'
       for arg in args
     )
-    self._order_by = ','.join(expressions)
-    return self
+    clone._order_by = ','.join(expressions)
+    return clone
 
   def refine(self, **kwargs: Any) -> Query:
     """

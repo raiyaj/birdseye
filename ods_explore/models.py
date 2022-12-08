@@ -59,7 +59,7 @@ class OpendatasoftCore:
 
 
 class Dataset(NamedTuple):
-  attachments: List
+  attachments: List[dict]
   data_visible: bool
   dataset_id: str
   dataset_uid: str
